@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import string
 import enum
 from dataclasses import dataclass
+from typing import TypeAlias
 
 
 OMMITTED_ARG: str = "_"
@@ -24,12 +27,14 @@ class TokenType(enum.Enum):
     ENDFUNCDEF = "endfunc"
     LEFTPAR = "("
     RIGHTPAR = ")"
+    RETURN = "return"
     FUNCMOD = "!@#%"
     COMMA = ","
     CONSTINT = string.digits
     CONSTEMPTYLST = "[]"
     CONSTSTR = "CONSTSTR"
     EQUALS = "="
+    EOF = "EOF"
 
 
 SINGLE_CHAR_TOKENS: dict[str, TokenType] = dict(
@@ -56,3 +61,73 @@ class Token:
 @dataclass
 class LexerError:
     msg: str
+
+
+class ParserErrorException(Exception):
+    pass
+
+
+@dataclass(frozen=True)
+class RRE_INT:
+    value: int
+
+
+@dataclass(frozen=True)
+class RRE_LIST:
+    value: list[RRE_VALUE]
+
+
+@dataclass(frozen=True)
+class RRE_THUNK:
+    funcref: Call
+    arguments: list[RRE_VALUE | None]
+
+
+@dataclass(frozen=True)
+class RRE_ERROR:
+    msg: str
+
+
+RRE_VALUE: TypeAlias = RRE_INT | RRE_LIST | RRE_THUNK
+RRE_TYPE: TypeAlias = type[RRE_INT] | type[RRE_LIST] | type[RRE_THUNK]
+
+
+class FUNC_MODS(enum.Enum):
+    ASSERT_WELLFOUNDEDNESS = "!"
+    TAIL_RECURSE = "@"
+    MEMOIZE = "#"
+    NON_EAGER = "%"
+
+
+@dataclass
+class Var:
+    varname: str
+
+
+@dataclass
+class Call:
+    funcname: str
+    params: list[Expr]
+
+
+Expr: TypeAlias = Var | RRE_VALUE | Call
+
+
+@dataclass
+class ConstDef:
+    name: str
+    value: Expr
+
+
+@dataclass
+class FunctionDef:
+    name: str
+    modifiers: list[FUNC_MODS]
+    params: list[str]
+    constants: list[ConstDef]
+    return_expr: Expr
+
+
+@dataclass
+class Program:
+    functions: list[FunctionDef]

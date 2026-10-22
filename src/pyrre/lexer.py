@@ -19,7 +19,12 @@ def try_commit_accumulated(
     joined = "".join(accumulated)
     charset = set(accumulated)
 
-    for tokentype in [TokenType.FUNCDEF, TokenType.ENDFUNCDEF, TokenType.CONSTEMPTYLST]:
+    for tokentype in [
+        TokenType.FUNCDEF,
+        TokenType.ENDFUNCDEF,
+        TokenType.CONSTEMPTYLST,
+        TokenType.RETURN,
+    ]:
         if joined == tokentype.value:
             lexed.append(Token(tokentype, tokentype.value))
             return
@@ -74,4 +79,4 @@ def lex(text: str) -> list[Token] | LexerError:
     if commission_error:
         return commission_error
 
-    return lexed
+    return lexed + [Token(TokenType.EOF, "")]
