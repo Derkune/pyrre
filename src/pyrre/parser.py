@@ -8,10 +8,10 @@ from pyrre.types import (
     Expr,
     RRE_INT,
     RRE_LIST,
-    RRE_THUNK,
     ParserErrorException,
     Var,
     Call,
+    ParserError,
 )
 
 
@@ -19,15 +19,11 @@ class Parser:
     def __init__(self, tokens: list[Token]) -> None:
         self.tokens: list[Token] = tokens
         self.pos: int = 0
-        self.errored: None | str = None
 
     def current(self) -> Token:
         return self.tokens[self.pos]
 
     def match(self, expected: TokenType) -> None:
-        if self.errored is not None:
-            raise Exception(f"Errored! Forgot to handle {self.errored}?")
-
         if self.current().token_type == expected:
             self.pos += 1
         else:
@@ -46,19 +42,13 @@ class Parser:
             funcs.append(self.parse_func())
 
     def parse_func(self) -> FunctionDef:
-        error = self.match(TokenType.FUNCDEF)
-        if error:
-            return error
+        self.match(TokenType.FUNCDEF)
 
         name = self.current().text
-        error = self.match(TokenType.NAME)
-        if error:
-            return error
+        self.match(TokenType.NAME)
 
         params = self.parse_params()
-
         mods = self.parse_func_mods()
-
         body = self.parse_until_endfunc()
 
         return FunctionDef(name, mods, params, *body)
@@ -70,12 +60,17 @@ class Parser:
 
         while True:
             if self.current().token_type == TokenType.RIGHTPAR:
+                self.match(TokenType.RIGHTPAR)
                 return params
 
             name = self.current().text
             self.match(TokenType.NAME)
             params.append(name)
-            self.match(TokenType.COMMA)
+            if self.current().token_type == TokenType.COMMA:
+                self.match(TokenType.COMMA)
+            else:
+                self.match(TokenType.RIGHTPAR)
+                return params
 
     def parse_func_mods(self) -> list[FUNC_MODS]:
         mods: list[FUNC_MODS] = []
@@ -90,6 +85,7 @@ class Parser:
 
         while True:
             if self.current().token_type == TokenType.RETURN:
+                self.match(TokenType.RETURN)
                 return_expr = self.parse_expression()
                 self.match(TokenType.ENDFUNCDEF)
 
@@ -101,9 +97,14 @@ class Parser:
         text = self.current().text
         match self.current().token_type:
             case TokenType.CONSTINT:
+                self.match(TokenType.CONSTINT)
                 return RRE_INT(int(text))
             case TokenType.CONSTEMPTYLST:
+                self.match(TokenType.CONSTEMPTYLST)
                 return RRE_LIST([])
+            case TokenType.CONSTSTR:
+                self.match(TokenType.CONSTSTR)
+                return RRE_LIST([RRE_INT(999)] * 9)
             case TokenType.NAME:
                 self.match(TokenType.NAME)
                 if self.current().token_type == TokenType.LEFTPAR:
@@ -135,3 +136,11 @@ class Parser:
         self.match(TokenType.NAME)
         self.match(TokenType.EQUALS)
         return ConstDef(constname, self.parse_expression())
+
+
+def parse(tokens: list[Token]) -> Program | ParserError:
+    parser = Parser(tokens)
+    try:
+        return parser.parse()
+    except ParserErrorException as e:
+        return ParserError(e.msg)

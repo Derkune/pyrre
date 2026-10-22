@@ -64,7 +64,15 @@ class LexerError:
 
 
 class ParserErrorException(Exception):
-    pass
+    def __init__(self, msg: str, *args: object) -> None:
+        super().__init__(msg, *args)
+
+        self.msg: str = msg
+
+
+@dataclass
+class ParserError:
+    msg: str
 
 
 @dataclass(frozen=True)
