@@ -37,6 +37,7 @@ class Parser:
         funcs: list[FunctionDef] = []
         while True:
             if self.current().token_type == TokenType.EOF:
+                self.match(TokenType.EOF)
                 return Program(funcs)
 
             funcs.append(self.parse_func())
