@@ -32,30 +32,31 @@ class Parser:
                 f"Expected {expected}, got {self.current().token_type}"
             )
 
-    # grammar definition below
-
     def parse(self) -> Program:
+        return self._parse_funcs()
+
+    def _parse_funcs(self) -> Program:
         funcs: list[FunctionDef] = []
         while True:
             if self.current().token_type == TokenType.EOF:
                 self.match(TokenType.EOF)
                 return Program(funcs)
 
-            funcs.append(self.parse_func())
+            funcs.append(self._parse_func())
 
-    def parse_func(self) -> FunctionDef:
+    def _parse_func(self) -> FunctionDef:
         self.match(TokenType.FUNCDEF)
 
         name = self.current().text
         self.match(TokenType.NAME)
 
-        params = self.parse_params()
-        mods = self.parse_func_mods()
-        body = self.parse_until_endfunc()
+        params = self._parse_params()
+        mods = self._parse_func_mods()
+        body = self._parse_until_endfunc()
 
         return FunctionDef(name, mods, params, *body)
 
-    def parse_params(self) -> list[str]:
+    def _parse_params(self) -> list[str]:
         self.match(TokenType.LEFTPAR)
 
         params: list[str] = []
@@ -74,7 +75,7 @@ class Parser:
                 self.match(TokenType.RIGHTPAR)
                 return params
 
-    def parse_func_mods(self) -> list[FUNC_MODS]:
+    def _parse_func_mods(self) -> list[FUNC_MODS]:
         mods: list[FUNC_MODS] = []
         while True:
             if self.current().token_type != TokenType.FUNCMOD:
@@ -82,20 +83,20 @@ class Parser:
             mods.append(FUNC_MODS(self.current().text))
             self.match(TokenType.FUNCMOD)
 
-    def parse_until_endfunc(self) -> tuple[list[ConstDef], Expr]:
+    def _parse_until_endfunc(self) -> tuple[list[ConstDef], Expr]:
         constants: list[ConstDef] = []
 
         while True:
             if self.current().token_type == TokenType.RETURN:
                 self.match(TokenType.RETURN)
-                return_expr = self.parse_expression()
+                return_expr = self._parse_expression()
                 self.match(TokenType.ENDFUNCDEF)
 
                 return constants, return_expr
 
-            constants.append(self.parse_constant_line())
+            constants.append(self._parse_constant_line())
 
-    def parse_expression(self) -> Expr:
+    def _parse_expression(self) -> Expr:
         text = self.current().text
         match self.current().token_type:
             case TokenType.CONSTINT:
@@ -110,13 +111,13 @@ class Parser:
             case TokenType.NAME:
                 self.match(TokenType.NAME)
                 if self.current().token_type == TokenType.LEFTPAR:
-                    return Call(text, self.parse_call_args())
+                    return Call(text, self._parse_call_args())
                 else:
                     return Var(text)
 
         raise ParserErrorException("Expected a constant or a subexpression")
 
-    def parse_call_args(self) -> list[Expr]:
+    def _parse_call_args(self) -> list[Expr]:
         self.match(TokenType.LEFTPAR)
         if self.current().token_type == TokenType.RIGHTPAR:
             self.match(TokenType.RIGHTPAR)
@@ -124,7 +125,7 @@ class Parser:
 
         exprs: list[Expr] = []
         while True:
-            exprs.append(self.parse_expression())
+            exprs.append(self._parse_expression())
             if self.current().token_type == TokenType.COMMA:
                 self.match(TokenType.COMMA)
             else:
@@ -133,11 +134,11 @@ class Parser:
 
         return exprs
 
-    def parse_constant_line(self) -> ConstDef:
+    def _parse_constant_line(self) -> ConstDef:
         constname = self.current().text
         self.match(TokenType.NAME)
         self.match(TokenType.EQUALS)
-        return ConstDef(constname, self.parse_expression())
+        return ConstDef(constname, self._parse_expression())
 
 
 def gather_func_call_names(
