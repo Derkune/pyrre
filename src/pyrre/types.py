@@ -14,7 +14,7 @@ NAME_CHARS: frozenset[str] = frozenset(
     ]
     for char in collection
 )
-PRIMITIVE_OPS: str = "+-?≥" + ">"  # alias
+PRIMITIVE_OPS: str = "+-?≥" + ">"  # last one is alias
 QUOTE = '"'
 
 
