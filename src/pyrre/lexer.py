@@ -10,7 +10,7 @@ from pyrre.types import (
 )
 
 
-def try_commit_accumulated(
+def _try_commit_accumulated(
     accumulated: list[str], lexed: list[Token]
 ) -> None | LexerError:
     if not accumulated:
@@ -60,7 +60,7 @@ def lex(text: str) -> list[Token] | LexerError:
             continue
 
         if char in SINGLE_CHAR_TOKENS or char in string.whitespace:
-            commission_error = try_commit_accumulated(accumulated, lexed)
+            commission_error = _try_commit_accumulated(accumulated, lexed)
             if commission_error:
                 return commission_error
             accumulated = []
@@ -75,7 +75,7 @@ def lex(text: str) -> list[Token] | LexerError:
     if inside_quote:
         return LexerError("Unclosed quote at the end")
 
-    commission_error = try_commit_accumulated(accumulated, lexed)
+    commission_error = _try_commit_accumulated(accumulated, lexed)
     if commission_error:
         return commission_error
 
