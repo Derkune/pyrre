@@ -141,35 +141,35 @@ class Parser:
         return ConstDef(constname, self._parse_expression())
 
 
-def gather_func_call_names(
+def _gather_func_call_names(
     item: Program | FunctionDef | Expr, func_calls: set[str]
 ) -> None:
     match item:
         case Program() as prog:
             for func in prog.functions:
-                gather_func_call_names(func, func_calls)
+                _gather_func_call_names(func, func_calls)
         case FunctionDef() as funcdef:
             for const in funcdef.constants:
-                gather_func_call_names(const.value, func_calls)
-            gather_func_call_names(funcdef.return_expr, func_calls)
+                _gather_func_call_names(const.value, func_calls)
+            _gather_func_call_names(funcdef.return_expr, func_calls)
         case Call() as call:
             func_calls.add(call.funcname)
             for param in call.params:
-                gather_func_call_names(param, func_calls)
+                _gather_func_call_names(param, func_calls)
 
 
-def check_calls_existing(program: Program) -> None:
+def _check_calls_existing(program: Program) -> None:
     existing_funcs: set[str] = {c for c in PRIMITIVE_OPS}
     existing_funcs.update(func.name for func in program.functions)
 
     func_calls: set[str] = set()
-    gather_func_call_names(program, func_calls)
+    _gather_func_call_names(program, func_calls)
 
     if diff := (func_calls - existing_funcs):
         raise ParserErrorException(f"Some functions are called but not defined, {diff}")
 
 
-def check_unique_func_names_and_starting_letters(program: Program) -> None:
+def _check_unique_func_names_and_starting_letters(program: Program) -> None:
     names: set[str] = set()
     starting_letters: set[str] = set()
     for func in program.functions:
@@ -184,7 +184,7 @@ def check_unique_func_names_and_starting_letters(program: Program) -> None:
         starting_letters.add(func.name[0].lower())
 
 
-def check_there_is_main(program: Program) -> None:
+def _check_there_is_main(program: Program) -> None:
     for func in program.functions:
         if func.name.lower() == "main":
             return
@@ -192,16 +192,16 @@ def check_there_is_main(program: Program) -> None:
     raise ParserErrorException("No main fnction among definitions")
 
 
-def post_parse_correctness(program: Program) -> Program:
-    check_there_is_main(program)
-    check_unique_func_names_and_starting_letters(program)
-    check_calls_existing(program)
+def _post_parse_correctness(program: Program) -> Program:
+    _check_there_is_main(program)
+    _check_unique_func_names_and_starting_letters(program)
+    _check_calls_existing(program)
     return program
 
 
 def parse(tokens: list[Token]) -> Program | ParserError:
     parser = Parser(tokens)
     try:
-        return post_parse_correctness(parser.parse())
+        return _post_parse_correctness(parser.parse())
     except ParserErrorException as e:
         return ParserError(e.msg)
