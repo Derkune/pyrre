@@ -45,7 +45,7 @@ SINGLE_CHAR_TOKENS: dict[str, TokenType] = dict(
         (TokenType.EQUALS.value, TokenType.EQUALS),
     ]
     + [(char, TokenType.FUNCMOD) for char in TokenType.FUNCMOD.value]
-    + [(char, TokenType.NAME) for char in PRIMITIVE_OPS + OMMITTED_ARG]
+    + [(char, TokenType.NAME) for char in PRIMITIVE_OPS]
 )
 
 
