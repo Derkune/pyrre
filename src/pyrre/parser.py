@@ -233,7 +233,11 @@ def _post_parse_correctness(program: Program) -> Program:
     return program
 
 
-def parse(tokens: list[Token]) -> Program | ParserError:
+def parse(
+    tokens: list[Token],
+) -> (
+    Program | ParserError
+):  # TODO: remove ParserError, transition to exception handling
     parser = Parser(tokens)
     try:
         return _post_parse_correctness(parser.parse())
