@@ -13,7 +13,35 @@ from pyrre.types import (
     Call,
     ParserError,
     PRIMITIVE_OPS,
+    RRE_VALUE,
 )
+from pyrre.static_config import (
+    MAX_CHAR_REPRESENTABLE_INT,
+    MIN_CHAR_REPRESENTABLE_INT,
+    MAX_INT,
+    MIN_INT,
+    MAX_LIST_LENGTH,
+)
+
+
+def parse_RRE_string(text: str) -> RRE_LIST:
+    chars: list[RRE_VALUE] = []
+
+    for char in text:
+        if MIN_CHAR_REPRESENTABLE_INT > ord(char) > MAX_CHAR_REPRESENTABLE_INT:
+            raise ParserErrorException(f"{char} is not allowed in a RRE string")
+
+        if MIN_INT > ord(char) > MAX_INT:
+            raise ParserErrorException(
+                f"{char} is somehow out of the range for integers"
+            )
+
+        chars.append(RRE_INT(ord(char)))
+
+    if len(chars) > MAX_LIST_LENGTH:
+        raise ParserErrorException("string is too long")
+
+    return RRE_LIST(chars)
 
 
 class Parser:
@@ -101,13 +129,16 @@ class Parser:
         match self.current().token_type:
             case TokenType.CONSTINT:
                 self.match(TokenType.CONSTINT)
+                val = int(text)
+                if MIN_INT > val > MAX_INT:
+                    raise ParserErrorException(f"{text} is out of range for ints")
                 return RRE_INT(int(text))
             case TokenType.CONSTEMPTYLST:
                 self.match(TokenType.CONSTEMPTYLST)
                 return RRE_LIST([])
             case TokenType.CONSTSTR:
                 self.match(TokenType.CONSTSTR)
-                return RRE_LIST([RRE_INT(999)] * 9)
+                return parse_RRE_string(text)
             case TokenType.NAME:
                 self.match(TokenType.NAME)
                 if self.current().token_type == TokenType.LEFTPAR:
