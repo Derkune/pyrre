@@ -16,6 +16,7 @@ from pyrre.types import (
     ParserError,
     PRIMITIVE_OPS,
     RRE_VALUE,
+    funcname,
 )
 from pyrre.static_config import (
     MAX_CHAR_REPRESENTABLE_INT,
@@ -66,7 +67,7 @@ class Parser:
         return self._parse_funcs()
 
     def _parse_funcs(self) -> Program:
-        funcs: dict[str, FunctionDef] = {}
+        funcs: dict[funcname, FunctionDef] = {}
         while True:
             if self.current().token_type == TokenType.EOF:
                 self.match(TokenType.EOF)

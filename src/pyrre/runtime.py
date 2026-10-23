@@ -15,14 +15,15 @@ from pyrre.types import (
     RRE_THUNK,
     Var,
     FunctionDef,
+    funcname,
 )
 
 
-def primitive_operation(symbol: str, *args: RRE_VALUE) -> RRE_VALUE:
+def primitive_operation(symbol: funcname, *args: RRE_VALUE) -> RRE_VALUE:
     return RRE_INT(999)
 
 
-def find_main_name(program: Program) -> str:
+def find_main_name(program: Program) -> funcname:
     for func in program.functions.keys():
         if func.lower() == "main":
             return func
@@ -33,7 +34,7 @@ def find_main_name(program: Program) -> str:
 def evaluate_constants(
     frame: StackFrame,
     parts_to_evaluate: list[Expr],
-) -> None | Call | str:
+) -> None | Call | funcname:
     while len(frame.evaluated_part_values) < len(parts_to_evaluate):
         param_expr: Expr = parts_to_evaluate[len(frame.evaluated_part_values)]
         match param_expr:
@@ -52,11 +53,11 @@ def evaluate_constants(
 
 
 def get_further_evaluation(
-    frame: StackFrame, functions: MappingProxyType[str, FunctionDef]
-) -> None | Call | str:
+    frame: StackFrame, functions: MappingProxyType[funcname, FunctionDef]
+) -> None | Call | funcname:
     match frame.evaluator:
-        case str() as funcname:
-            func = functions[funcname]
+        case funcname() as function_name:
+            func = functions[function_name]
             return evaluate_constants(
                 frame,
                 [l.value for l in func.lines] + [func.return_expr],
@@ -76,11 +77,11 @@ def _cast(expr: Expr) -> RRE_VALUE:
 
 
 def get_value_from_fully_evaluated_frame(
-    frame: StackFrame, functions: MappingProxyType[str, FunctionDef]
+    frame: StackFrame, functions: MappingProxyType[funcname, FunctionDef]
 ) -> RRE_VALUE:
     match frame.evaluator:
-        case str() as funcname:
-            function = functions[funcname]
+        case funcname() as function_name:
+            function = functions[function_name]
             return frame.evaluated_part_values[len(function.lines)]  # return value
         case Call() as call:  # assumed to be a primitive
             params = [_cast(p) for p in call.params]
@@ -94,6 +95,15 @@ def handle_value_on_top_of_stack(value: RRE_VALUE, stack: CallStack) -> None:
 
     top_frame = stack.frames[-1]
     top_frame.evaluated_part_values.append(value)
+    if isinstance(top_frame.evaluator, funcname):
+        function = stack.program.functions[top_frame.evaluator]
+        if len(top_frame.evaluated_part_values) >= len(function.params):
+            # just appended the return value
+            return
+
+        line_idx = len(top_frame.evaluated_part_values) - 1
+        line = function.lines[line_idx]
+        top_frame.local_vars[line.name] = value
 
 
 def advance_step(stack: CallStack) -> CallStack:
@@ -103,7 +113,7 @@ def advance_step(stack: CallStack) -> CallStack:
         stack.frames.append(StackFrame(find_main_name(stack.program), {}))
 
     top_frame = stack.frames[-1]
-    to_further_evaluate: None | Call | str = get_further_evaluation(
+    to_further_evaluate: None | Call | funcname = get_further_evaluation(
         top_frame, stack.program.functions
     )
 
@@ -116,7 +126,7 @@ def advance_step(stack: CallStack) -> CallStack:
             handle_value_on_top_of_stack(value, stack)
         case Call():
             stack.frames.append(StackFrame(to_further_evaluate, top_frame.local_vars))
-        case str():
+        case funcname():
             stack.frames.append(StackFrame(to_further_evaluate, {}))
 
     return stack

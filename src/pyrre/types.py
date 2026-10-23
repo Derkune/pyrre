@@ -7,6 +7,9 @@ from typing import TypeAlias
 from types import MappingProxyType
 
 
+funcname: TypeAlias = str
+
+
 OMMITTED_ARG: str = "_"
 NAME_CHARS: frozenset[str] = frozenset(
     char
@@ -119,7 +122,7 @@ class Var:
 
 @dataclass(frozen=True)
 class Call:
-    funcname: str
+    funcname: funcname
     params: list[Expr]
 
 
@@ -127,14 +130,14 @@ Expr: TypeAlias = Var | RRE_VALUE | Call
 
 
 @dataclass(frozen=True)
-class ConstDef:
-    name: str
+class ConstDef:  # TODO: rename to Line
+    name: str  # TODO: rename to varname
     value: Expr
 
 
 @dataclass(frozen=True)
 class FunctionDef:
-    name: str
+    name: funcname
     modifiers: list[FUNC_MODS]
     params: list[str]
     lines: list[ConstDef]
@@ -143,12 +146,12 @@ class FunctionDef:
 
 @dataclass(frozen=True)
 class Program:
-    functions: MappingProxyType[str, FunctionDef]
+    functions: MappingProxyType[funcname, FunctionDef]
 
 
 @dataclass(frozen=True)
 class StackFrame:
-    evaluator: str | Call
+    evaluator: funcname | Call
     local_vars: dict[str, RRE_VALUE]
     evaluated_part_values: list[RRE_VALUE] = field(default_factory=list)
 
