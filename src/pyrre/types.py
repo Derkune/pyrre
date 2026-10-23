@@ -138,4 +138,4 @@ class FunctionDef:
 
 @dataclass
 class Program:
-    functions: list[FunctionDef]
+    functions: dict[str, FunctionDef]

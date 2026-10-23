@@ -64,13 +64,17 @@ class Parser:
         return self._parse_funcs()
 
     def _parse_funcs(self) -> Program:
-        funcs: list[FunctionDef] = []
+        funcs: dict[str, FunctionDef] = {}
         while True:
             if self.current().token_type == TokenType.EOF:
                 self.match(TokenType.EOF)
                 return Program(funcs)
 
-            funcs.append(self._parse_func())
+            func = self._parse_func()
+            if func.name in funcs:
+                raise ParserErrorException(f"{func.name} defined more than once")
+
+            funcs[func.name] = func
 
     def _parse_func(self) -> FunctionDef:
         self.match(TokenType.FUNCDEF)
@@ -177,7 +181,7 @@ def _gather_func_call_names(
 ) -> None:
     match item:
         case Program() as prog:
-            for func in prog.functions:
+            for func in prog.functions.values():
                 _gather_func_call_names(func, func_calls)
         case FunctionDef() as funcdef:
             for const in funcdef.constants:
@@ -191,7 +195,7 @@ def _gather_func_call_names(
 
 def _check_calls_existing(program: Program) -> None:
     existing_funcs: set[str] = {c for c in PRIMITIVE_OPS}
-    existing_funcs.update(func.name for func in program.functions)
+    existing_funcs.update(func.name for func in program.functions.values())
 
     func_calls: set[str] = set()
     _gather_func_call_names(program, func_calls)
@@ -201,22 +205,18 @@ def _check_calls_existing(program: Program) -> None:
 
 
 def _check_unique_func_names_and_starting_letters(program: Program) -> None:
-    names: set[str] = set()
     starting_letters: set[str] = set()
-    for func in program.functions:
-        if func.name.lower() in names:
-            raise ParserErrorException(f"{func.name} defined more than 1 time")
+    for func in program.functions.values():
         if func.name[0].lower() in starting_letters:
             raise ParserErrorException(
                 f"function starting with {func.name[0]} defined more than once"
             )
 
-        names.add(func.name.lower())
         starting_letters.add(func.name[0].lower())
 
 
 def _check_there_is_main(program: Program) -> None:
-    for func in program.functions:
+    for func in program.functions.values():
         if func.name.lower() == "main":
             return
 
