@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import string
 import enum
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TypeAlias
 
 
@@ -59,7 +59,7 @@ class Token:
 
 
 @dataclass
-class LexerError:
+class LexerError:  # TODO: experiment with abolishing exceptions unsuccessful, switch this back too for consistency
     msg: str
 
 
@@ -68,6 +68,10 @@ class ParserErrorException(Exception):
         super().__init__(msg, *args)
 
         self.msg: str = msg
+
+
+class RuntimErrorException(Exception):
+    pass
 
 
 @dataclass
@@ -132,10 +136,24 @@ class FunctionDef:
     name: str
     modifiers: list[FUNC_MODS]
     params: list[str]
-    constants: list[ConstDef]
+    lines: list[ConstDef]
     return_expr: Expr
 
 
 @dataclass
 class Program:
     functions: dict[str, FunctionDef]
+
+
+@dataclass
+class StackFrame:
+    evaluator: str | Call
+    local_vars: dict[str, RRE_VALUE]
+    evaluated_part_values: list[RRE_VALUE] = field(default_factory=list)
+
+
+@dataclass
+class CallStack:
+    program: Program
+    frames: list[StackFrame] = field(default_factory=list)
+    final_value: None | RRE_VALUE = None

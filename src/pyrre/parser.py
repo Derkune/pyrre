@@ -116,7 +116,7 @@ class Parser:
             self.match(TokenType.FUNCMOD)
 
     def _parse_until_endfunc(self) -> tuple[list[ConstDef], Expr]:
-        constants: list[ConstDef] = []
+        lines: list[ConstDef] = []
 
         while True:
             if self.current().token_type == TokenType.RETURN:
@@ -124,9 +124,9 @@ class Parser:
                 return_expr = self._parse_expression()
                 self.match(TokenType.ENDFUNCDEF)
 
-                return constants, return_expr
+                return lines, return_expr
 
-            constants.append(self._parse_constant_line())
+            lines.append(self._parse_constant_line())
 
     def _parse_expression(self) -> Expr:
         text = self.current().text
@@ -184,7 +184,7 @@ def _gather_func_call_names(
             for func in prog.functions.values():
                 _gather_func_call_names(func, func_calls)
         case FunctionDef() as funcdef:
-            for const in funcdef.constants:
+            for const in funcdef.lines:
                 _gather_func_call_names(const.value, func_calls)
             _gather_func_call_names(funcdef.return_expr, func_calls)
         case Call() as call:
@@ -227,6 +227,7 @@ def _post_parse_correctness(program: Program) -> Program:
     _check_there_is_main(program)
     _check_unique_func_names_and_starting_letters(program)
     _check_calls_existing(program)
+    # TODO: check var names unique in a function
     return program
 
 
