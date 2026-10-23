@@ -16,6 +16,7 @@ from pyrre.types import (
     PRIMITIVE_OPS,
     RRE_VALUE,
     funcname,
+    OMMITTED_ARG,
 )
 from pyrre.static_config import (
     MAX_CHAR_REPRESENTABLE_INT,
@@ -178,6 +179,50 @@ class Parser:
         return Line(constname, self._parse_expression())
 
 
+def _check_ommitted_params_come_last(program_part: Program | Expr) -> None:
+    if isinstance(program_part, Program):
+        for func in program_part.functions.values():
+            for line in func.lines:
+                _check_ommitted_params_come_last(line.value)
+            _check_ommitted_params_come_last(func.return_expr)
+
+    if isinstance(program_part, Call):
+        encountered_ommitted: bool = False
+        for param in program_part.params:
+            if isinstance(param, Var) and param.varname == OMMITTED_ARG:
+                encountered_ommitted = True
+                continue
+
+            if encountered_ommitted:
+                raise ParserErrorException("An ommitted arg was not last")
+
+            if isinstance(param, Call):
+                _check_ommitted_params_come_last(param)
+
+
+def _gather_vars_referenced_in_expr(expr: Expr) -> set[str]:
+    match expr:
+        case Var() as var:
+            return set([var.varname])
+        case Call() as call:
+            s = set()
+            for call_expr in call.params:
+                s.update(_gather_vars_referenced_in_expr(call_expr))
+            return s
+        case _:
+            return set()
+
+
+def _check_references_existing_vars(program: Program) -> None:
+    for func in program.functions.values():
+        funcvars = set()
+        for line in func.lines:
+            vars_referenced = _gather_vars_referenced_in_expr(line.value)
+            if vars_referenced.difference(funcvars):
+                raise ParserErrorException("referencing an undefined variable")
+            funcvars.add(line.varname)
+
+
 def _check_unique_vars(program: Program) -> None:
     for func in program.functions.values():
         params = set(func.params)
@@ -245,6 +290,8 @@ def _post_parse_correctness(program: Program) -> Program:
     _check_unique_func_names_and_starting_letters(program)
     _check_calls_existing(program)
     _check_unique_vars(program)
+    _check_references_existing_vars(program)
+    _check_ommitted_params_come_last(program)
     return program
 
 
