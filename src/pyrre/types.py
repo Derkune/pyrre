@@ -130,8 +130,8 @@ Expr: TypeAlias = Var | RRE_VALUE | Call
 
 
 @dataclass(frozen=True)
-class ConstDef:  # TODO: rename to Line
-    name: str  # TODO: rename to varname
+class Line:
+    varname: str
     value: Expr
 
 
@@ -140,7 +140,7 @@ class FunctionDef:
     name: funcname
     modifiers: list[FUNC_MODS]
     params: list[str]
-    lines: list[ConstDef]
+    lines: list[Line]
     return_expr: Expr
 
 

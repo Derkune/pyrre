@@ -6,7 +6,7 @@ from pyrre.types import (
     Program,
     FunctionDef,
     FUNC_MODS,
-    ConstDef,
+    Line,
     Expr,
     RRE_INT,
     RRE_LIST,
@@ -118,8 +118,8 @@ class Parser:
             mods.append(FUNC_MODS(self.current().text))
             self.match(TokenType.FUNCMOD)
 
-    def _parse_until_endfunc(self) -> tuple[list[ConstDef], Expr]:
-        lines: list[ConstDef] = []
+    def _parse_until_endfunc(self) -> tuple[list[Line], Expr]:
+        lines: list[Line] = []
 
         while True:
             if self.current().token_type == TokenType.RETURN:
@@ -172,11 +172,11 @@ class Parser:
 
         return exprs
 
-    def _parse_constant_line(self) -> ConstDef:
+    def _parse_constant_line(self) -> Line:
         constname = self.current().text
         self.match(TokenType.NAME)
         self.match(TokenType.EQUALS)
-        return ConstDef(constname, self._parse_expression())
+        return Line(constname, self._parse_expression())
 
 
 def _gather_func_call_names(

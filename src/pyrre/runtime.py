@@ -6,7 +6,7 @@ from pyrre.types import (
     Program,
     RuntimErrorException,
     StackFrame,
-    ConstDef,
+    Line,
     Expr,
     Call,
     RRE_VALUE,
@@ -103,7 +103,7 @@ def handle_value_on_top_of_stack(value: RRE_VALUE, stack: CallStack) -> None:
 
         line_idx = len(top_frame.evaluated_part_values) - 1
         line = function.lines[line_idx]
-        top_frame.local_vars[line.name] = value
+        top_frame.local_vars[line.varname] = value
 
 
 def advance_step(stack: CallStack) -> CallStack:
