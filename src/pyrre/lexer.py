@@ -79,4 +79,4 @@ def lex(text: str) -> list[Token] | LexerError:
     if commission_error:
         return commission_error
 
-    return lexed + [Token(TokenType.EOF, "")]
+    return lexed + [Token(TokenType.EOF, TokenType.EOF.value)]

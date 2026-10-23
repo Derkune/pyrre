@@ -13,7 +13,7 @@ NAME_CHARS: frozenset[str] = frozenset(
         string.ascii_letters,
         [c.upper() for c in string.ascii_letters],
         string.digits,
-        "_",
+        OMMITTED_ARG,
     ]
     for char in collection
 )
