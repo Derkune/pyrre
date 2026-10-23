@@ -178,6 +178,21 @@ class Parser:
         return Line(constname, self._parse_expression())
 
 
+def _check_unique_vars(program: Program) -> None:
+    for func in program.functions.values():
+        params = set(func.params)
+        if len(params) != len(func.params):
+            raise ParserErrorException("Non-unique func param names")
+
+        lines = set(l.varname for l in func.lines)
+        if len(lines) != len(func.lines):
+            raise ParserErrorException("Non-unique func var names")
+
+        allvars = params.union(lines)
+        if len(allvars) != len(lines) + len(params):
+            raise ParserErrorException("Overlap between param names and var names")
+
+
 def _gather_func_call_names(
     item: Program | FunctionDef | Expr, func_calls: set[str]
 ) -> None:
@@ -229,7 +244,7 @@ def _post_parse_correctness(program: Program) -> Program:
     _check_there_is_main(program)
     _check_unique_func_names_and_starting_letters(program)
     _check_calls_existing(program)
-    # TODO: check var names unique in a function
+    _check_unique_vars(program)
     return program
 
 
