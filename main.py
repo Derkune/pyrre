@@ -1,4 +1,4 @@
-from pyrre.types import LexerError, ParserError, CallStack
+from pyrre.types import LexerError, CallStack
 from pyrre.lexer import lex
 from pyrre.parser import parse
 from pyrre.runtime import advance_step
@@ -9,7 +9,6 @@ if __name__ == "__main__":
         lexed = lex(_f.read())
         assert not isinstance(lexed, LexerError)
         parsed = parse(lexed)
-        assert not isinstance(parsed, ParserError)
         stack = CallStack(parsed)
         history = []
         for _ in range(1000):

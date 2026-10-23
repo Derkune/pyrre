@@ -13,7 +13,6 @@ from pyrre.types import (
     ParserErrorException,
     Var,
     Call,
-    ParserError,
     PRIMITIVE_OPS,
     RRE_VALUE,
     funcname,
@@ -236,11 +235,6 @@ def _post_parse_correctness(program: Program) -> Program:
 
 def parse(
     tokens: list[Token],
-) -> (
-    Program | ParserError
-):  # TODO: remove ParserError, transition to exception handling
+) -> Program:
     parser = Parser(tokens)
-    try:
-        return _post_parse_correctness(parser.parse())
-    except ParserErrorException as e:
-        return ParserError(e.msg)
+    return _post_parse_correctness(parser.parse())

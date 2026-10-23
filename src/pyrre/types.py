@@ -78,11 +78,6 @@ class RuntimErrorException(Exception):
     pass
 
 
-@dataclass
-class ParserError:
-    msg: str
-
-
 @dataclass(frozen=True)
 class RRE_INT:
     value: int
