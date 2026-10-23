@@ -62,9 +62,11 @@ class Token:
         return f'{self.token_type.name}: "{self.text}"'
 
 
-@dataclass
-class LexerError:  # TODO: experiment with abolishing exceptions unsuccessful, switch this back too for consistency
-    msg: str
+class LexerErrorException(Exception):
+    def __init__(self, msg: str, *args: object) -> None:
+        super().__init__(msg, *args)
+
+        self.msg: str = msg
 
 
 class ParserErrorException(Exception):

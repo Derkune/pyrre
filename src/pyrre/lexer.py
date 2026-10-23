@@ -2,17 +2,15 @@ import string
 
 from pyrre.types import (
     Token,
-    LexerError,
     TokenType,
     NAME_CHARS,
     QUOTE,
     SINGLE_CHAR_TOKENS,
+    LexerErrorException,
 )
 
 
-def _try_commit_accumulated(
-    accumulated: list[str], lexed: list[Token]
-) -> None | LexerError:
+def _try_commit_accumulated(accumulated: list[str], lexed: list[Token]) -> None:
     if not accumulated:
         return
 
@@ -34,15 +32,15 @@ def _try_commit_accumulated(
         return
 
     if joined[0] in string.digits:
-        return LexerError("Name can't start with digit")
+        raise LexerErrorException("Name can't start with digit")
 
     if not charset.issubset(NAME_CHARS):
-        return LexerError("Name contains disallowed chars")
+        raise LexerErrorException("Name contains disallowed chars")
 
     lexed.append(Token(TokenType.NAME, joined))
 
 
-def lex(text: str) -> list[Token] | LexerError:
+def lex(text: str) -> list[Token]:
     lexed: list[Token] = []
     accumulated: list[str] = []
     inside_quote: bool = False
@@ -73,7 +71,7 @@ def lex(text: str) -> list[Token] | LexerError:
         accumulated.append(char)
 
     if inside_quote:
-        return LexerError("Unclosed quote at the end")
+        raise LexerErrorException("Unclosed quote at the end")
 
     commission_error = _try_commit_accumulated(accumulated, lexed)
     if commission_error:
