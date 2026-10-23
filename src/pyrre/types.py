@@ -4,6 +4,7 @@ import string
 import enum
 from dataclasses import dataclass, field
 from typing import TypeAlias
+from types import MappingProxyType
 
 
 OMMITTED_ARG: str = "_"
@@ -111,12 +112,12 @@ class FUNC_MODS(enum.Enum):
     NON_EAGER = "%"
 
 
-@dataclass
+@dataclass(frozen=True)
 class Var:
     varname: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class Call:
     funcname: str
     params: list[Expr]
@@ -125,13 +126,13 @@ class Call:
 Expr: TypeAlias = Var | RRE_VALUE | Call
 
 
-@dataclass
+@dataclass(frozen=True)
 class ConstDef:
     name: str
     value: Expr
 
 
-@dataclass
+@dataclass(frozen=True)
 class FunctionDef:
     name: str
     modifiers: list[FUNC_MODS]
@@ -140,16 +141,19 @@ class FunctionDef:
     return_expr: Expr
 
 
-@dataclass
+@dataclass(frozen=True)
 class Program:
-    functions: dict[str, FunctionDef]
+    functions: MappingProxyType[str, FunctionDef]
 
 
-@dataclass
+@dataclass(frozen=True)
 class StackFrame:
     evaluator: str | Call
     local_vars: dict[str, RRE_VALUE]
     evaluated_part_values: list[RRE_VALUE] = field(default_factory=list)
+
+    def copy_frame(self) -> StackFrame:
+        return StackFrame(self.evaluator, self.local_vars, self.evaluated_part_values)
 
 
 @dataclass
@@ -157,3 +161,8 @@ class CallStack:
     program: Program
     frames: list[StackFrame] = field(default_factory=list)
     final_value: None | RRE_VALUE = None
+
+    def copy_stack(self) -> CallStack:
+        return CallStack(
+            self.program, [f.copy_frame() for f in self.frames], self.final_value
+        )

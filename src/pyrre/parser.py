@@ -1,3 +1,5 @@
+from types import MappingProxyType
+
 from pyrre.types import (
     Token,
     TokenType,
@@ -68,7 +70,7 @@ class Parser:
         while True:
             if self.current().token_type == TokenType.EOF:
                 self.match(TokenType.EOF)
-                return Program(funcs)
+                return Program(MappingProxyType(funcs))
 
             func = self._parse_func()
             if func.name in funcs:
