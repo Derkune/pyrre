@@ -260,6 +260,24 @@ def RRE_PLUS(
             raise RRE_TypeErrorException("Unknown type in RRE_PLUS")
 
 
+def lexicographical_comparison(
+    lst1: immutable_list[RRE_VALUE],
+    lst2: immutable_list[RRE_VALUE],
+    functions: ImmutableMappingWithIdx[funcname, FunctionDef],
+) -> int:
+    for item1, item2 in zip(lst1, lst2):
+        result = value_comparison(item1, item2, functions)
+        if result:
+            return result
+
+    if len(lst1) > len(lst2):
+        return 1
+    if len(lst1) < len(lst2):
+        return -1
+
+    return 0
+
+
 def value_comparison(
     val1: RRE_VALUE,
     val2: RRE_VALUE,
@@ -280,17 +298,7 @@ def value_comparison(
         case RRE_LIST(), RRE_INT():
             return 1
         case RRE_LIST(), RRE_LIST():
-            if len(val1.value) > len(val2.value):
-                return 1
-            if len(val1.value) < len(val2.value):
-                return -1
-
-            for item1, item2 in zip(val1.value, val2.value, strict=True):
-                result = value_comparison(item1, item2, functions)
-                if result:
-                    return result
-
-            return 0
+            return lexicographical_comparison(val1.value, val2.value, functions)
         case RRE_LIST(), RRE_THUNK():
             return -1
         case RRE_LIST(), RRE_ERROR():
@@ -305,17 +313,7 @@ def value_comparison(
                 return 1
             if functions.get_idx(val1.funcname) < functions.get_idx(val2.funcname):
                 return -1
-            if len(val1.arguments) > len(val2.arguments):
-                return 1
-            if len(val1.arguments) < len(val2.arguments):
-                return -1
-
-            for item1, item2 in zip(val1.arguments, val2.arguments, strict=True):
-                result = value_comparison(item1, item2, functions)
-                if result:
-                    return result
-
-            return 0
+            return lexicographical_comparison(val1.arguments, val2.arguments, functions)
 
         case RRE_THUNK(), RRE_ERROR():
             return -1
