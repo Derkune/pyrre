@@ -11,6 +11,7 @@ from typing import (
     Generic,
     KeysView,
     ValuesView,
+    Callable,
 )
 from collections.abc import Mapping
 import copy
@@ -75,7 +76,6 @@ NAME_CHARS: frozenset[str] = frozenset(
     ]
     for char in collection
 )
-PRIMITIVE_OPS: str = "+-?≥" + ">"  # last one is alias
 QUOTE = '"'
 RETURN_BINDING: str = "+++RETURN+++"
 
@@ -96,6 +96,7 @@ class TokenType(enum.Enum):
     EOF = "EOF"
 
 
+PRIMITIVE_OP_SYMBOLS: str = "+-?≥" + ">"  # last one is an alias
 SINGLE_CHAR_TOKENS: dict[str, TokenType] = dict(
     [
         (TokenType.LEFTPAR.value, TokenType.LEFTPAR),
@@ -104,7 +105,7 @@ SINGLE_CHAR_TOKENS: dict[str, TokenType] = dict(
         (TokenType.EQUALS.value, TokenType.EQUALS),
     ]
     + [(char, TokenType.FUNCMOD) for char in TokenType.FUNCMOD.value]
-    + [(char, TokenType.NAME) for char in PRIMITIVE_OPS]
+    + [(char, TokenType.NAME) for char in PRIMITIVE_OP_SYMBOLS]
 )
 
 
@@ -198,9 +199,13 @@ class FunctionDef:
     lines: immutable_list[BindingLine]
 
 
+class FunctionMappingView(ImmutableMappingViewWithIdx[funcname, FunctionDef]):
+    pass
+
+
 @dataclass(frozen=True)
 class Program:
-    functions: ImmutableMappingViewWithIdx[funcname, FunctionDef]
+    functions: FunctionMappingView
 
 
 class RRE_TypeErrorException(Exception):
@@ -210,11 +215,7 @@ class RRE_TypeErrorException(Exception):
         self.msg: str = msg
 
 
-def RRE_PLUS(
-    val1: RRE_VALUE,
-    val2: RRE_VALUE,
-    _: ImmutableMappingViewWithIdx[funcname, FunctionDef],
-) -> RRE_VALUE:
+def RRE_PLUS(val1: RRE_VALUE, val2: RRE_VALUE, _: FunctionMappingView) -> RRE_VALUE:
     match val1, val2:
         case RRE_INT(), RRE_INT():
             return RRE_INT(val1.value + val2.value)
@@ -259,7 +260,7 @@ def RRE_PLUS(
 def lexicographical_comparison(
     lst1: immutable_list[RRE_VALUE],
     lst2: immutable_list[RRE_VALUE],
-    functions: ImmutableMappingViewWithIdx[funcname, FunctionDef],
+    functions: FunctionMappingView,
 ) -> int:
     for item1, item2 in zip(lst1, lst2):
         result = value_comparison(item1, item2, functions)
@@ -275,9 +276,7 @@ def lexicographical_comparison(
 
 
 def value_comparison(
-    val1: RRE_VALUE,
-    val2: RRE_VALUE,
-    functions: ImmutableMappingViewWithIdx[funcname, FunctionDef],
+    val1: RRE_VALUE, val2: RRE_VALUE, functions: FunctionMappingView
 ) -> int:
     match val1, val2:
         case RRE_INT(), RRE_INT():
@@ -330,7 +329,7 @@ def value_comparison(
 def list_difference(
     list1: immutable_list[RRE_VALUE],
     list2: immutable_list[RRE_VALUE],
-    functions: ImmutableMappingViewWithIdx[funcname, FunctionDef],
+    functions: FunctionMappingView,
 ) -> immutable_list[RRE_VALUE]:
     lst1: list[RRE_VALUE] = list(list1)
     lst2: list[RRE_VALUE] = list(list2)
@@ -359,9 +358,7 @@ def try_clamp_lst_idx(val: int, lst_len: int) -> None | int:
 
 
 def RRE_MINUS(
-    val1: RRE_VALUE,
-    val2: RRE_VALUE,
-    functions: ImmutableMappingViewWithIdx[funcname, FunctionDef],
+    val1: RRE_VALUE, val2: RRE_VALUE, functions: FunctionMappingView
 ) -> RRE_VALUE:
     match val1, val2:
         case RRE_INT(), RRE_INT():
@@ -436,9 +433,7 @@ def is_truthy(val: RRE_VALUE) -> bool:
 
 
 def RRE_COMPARE(
-    val1: RRE_VALUE,
-    val2: RRE_VALUE,
-    functions: ImmutableMappingViewWithIdx[funcname, FunctionDef],
+    val1: RRE_VALUE, val2: RRE_VALUE, functions: FunctionMappingView
 ) -> RRE_VALUE:
     if isinstance(val1, RRE_ERROR) and isinstance(val2, RRE_ERROR):
         return RRE_ERROR(f"{val1.msg}|{val2.msg}")
@@ -451,10 +446,13 @@ def RRE_COMPARE(
 
 
 def RRE_CONDITION(
-    val1: RRE_VALUE,
-    val2: RRE_THUNK,
-    _: ImmutableMappingViewWithIdx[funcname, FunctionDef],
+    val1: RRE_VALUE, val2: RRE_VALUE, _: FunctionMappingView
 ) -> RRE_VALUE:
+    if not isinstance(val2, RRE_THUNK):
+        raise RRE_TypeErrorException(
+            "expected a thunk, got some other value in RRE_CONDITION"
+        )
+
     if isinstance(val1, RRE_ERROR):
         return val1
 
@@ -463,6 +461,24 @@ def RRE_CONDITION(
 
     evaluated = evaluate_thunk(val2)  # TODO
     return evaluated
+
+
+EXPECTED_AMOUNT_OF_ARGS_IN_PRIMITIVE: int = 2
+PrimitiveOpSignature: TypeAlias = Callable[
+    [RRE_VALUE, RRE_VALUE, FunctionMappingView], RRE_VALUE
+]
+
+
+PRIMITIVE_OPS: dict[
+    str,
+    PrimitiveOpSignature,
+] = {
+    "+": RRE_PLUS,
+    "-": RRE_MINUS,
+    "?": RRE_CONDITION,
+    "≥": RRE_COMPARE,
+    ">": RRE_COMPARE,
+}
 
 
 @dataclass
@@ -476,13 +492,23 @@ class ExpressionStackFrame:
 class FunctionStackFrame:
     funcname: funcname
     bindings: dict[str, RRE_VALUE] = field(default_factory=dict)
-    ret_val: None | RRE_VALUE = None
+    # TODO: problem: num of existing bindings is expected to track line num, but this is
+    # untrue because args are also bindings
 
 
 @dataclass
 class ProgramStack:
     program: Program
+    program_inputs: list[RRE_VALUE]
     call_stack: list[FunctionStackFrame | ExpressionStackFrame] = field(
         default_factory=list
     )
     final_value: None | RRE_VALUE = None
+
+    def copy_stack(self) -> ProgramStack:
+        return ProgramStack(
+            self.program,
+            copy.deepcopy(self.program_inputs),
+            copy.deepcopy(self.call_stack),
+            self.final_value,
+        )

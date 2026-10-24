@@ -18,6 +18,8 @@ from pyrre.types import (
     ImmutableMappingViewWithIdx,
     immutable_list,
     RETURN_BINDING,
+    PrimitiveOpSignature,
+    FunctionMappingView,
 )
 from pyrre.static_config import (
     MAX_CHAR_REPRESENTABLE_INT,
@@ -72,7 +74,7 @@ class Parser:
         while True:
             if self.current().token_type == TokenType.EOF:
                 self.match(TokenType.EOF)
-                return Program(ImmutableMappingViewWithIdx(funcs))
+                return Program(FunctionMappingView(funcs))
 
             func = self._parse_func()
             if func.name in funcs:
