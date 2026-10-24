@@ -93,7 +93,7 @@ class RRE_LIST:
 @dataclass(frozen=True)
 class RRE_THUNK:
     funcname: funcname
-    arguments: list[RRE_VALUE | None]
+    arguments: list[RRE_VALUE]
 
 
 @dataclass(frozen=True)
@@ -113,8 +113,8 @@ class FUNC_MODS(enum.Enum):
 
 
 @dataclass(frozen=True)
-class Var:
-    varname: str
+class Binding:
+    bindname: str
 
 
 @dataclass(frozen=True)
@@ -123,17 +123,17 @@ class Call:
     params: list[Expr]
 
 
-Expr: TypeAlias = Var | RRE_VALUE | Call
+Expr: TypeAlias = Binding | RRE_VALUE | Call
 
 
 @dataclass(frozen=True)
-class VarLine:
-    varname: str
+class ExprLine:
+    expr_name: str
     expr: Expr
 
 
 @dataclass(frozen=True)
-class ReturnValue:
+class ReturnExpr:
     expr: Expr
 
 
@@ -141,8 +141,8 @@ class ReturnValue:
 class FunctionDef:
     name: funcname
     modifiers: list[FUNC_MODS]
-    params: list[str]
-    lines: list[VarLine | ReturnValue]
+    param_names: list[str]
+    lines: list[ExprLine | ReturnExpr]
 
 
 @dataclass(frozen=True)
