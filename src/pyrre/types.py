@@ -20,11 +20,11 @@ TK = TypeVar("TK")
 TV = TypeVar("TV")
 
 
-class ImmutableMappingWithIdx(Mapping, Generic[TK, TV]):
-    def __init__(self, inp_dict: Mapping[TK, TV] | None = None) -> None:
+class ImmutableMappingViewWithIdx(Mapping, Generic[TK, TV]):
+    def __init__(self, inp_dict: dict[TK, TV] | None = None) -> None:
         self._dct: dict[TK, TV] = {}
         if inp_dict:
-            self._dct = {k: v for (k, v) in inp_dict.items()}
+            self._dct = inp_dict
 
     def get_idx(self, k: TK) -> int:
         for idx, key in enumerate(self._dct.keys()):
@@ -77,6 +77,7 @@ NAME_CHARS: frozenset[str] = frozenset(
 )
 PRIMITIVE_OPS: str = "+-?≥" + ">"  # last one is alias
 QUOTE = '"'
+RETURN_BINDING: str = "+++RETURN+++"
 
 
 class TokenType(enum.Enum):
@@ -184,13 +185,8 @@ Expr: TypeAlias = Binding | RRE_VALUE | Call
 
 
 @dataclass(frozen=True)
-class ExprLine:
-    expr_name: str
-    expr: Expr
-
-
-@dataclass(frozen=True)
-class ReturnExpr:
+class BindingLine:
+    bind_name: str
     expr: Expr
 
 
@@ -199,12 +195,12 @@ class FunctionDef:
     name: funcname
     modifiers: immutable_list[FUNC_MODS]
     param_names: immutable_list[str]
-    lines: immutable_list[ExprLine | ReturnExpr]
+    lines: immutable_list[BindingLine]
 
 
 @dataclass(frozen=True)
 class Program:
-    functions: ImmutableMappingWithIdx[funcname, FunctionDef]
+    functions: ImmutableMappingViewWithIdx[funcname, FunctionDef]
 
 
 class RRE_TypeErrorException(Exception):
@@ -217,7 +213,7 @@ class RRE_TypeErrorException(Exception):
 def RRE_PLUS(
     val1: RRE_VALUE,
     val2: RRE_VALUE,
-    _: ImmutableMappingWithIdx[funcname, FunctionDef],
+    _: ImmutableMappingViewWithIdx[funcname, FunctionDef],
 ) -> RRE_VALUE:
     match val1, val2:
         case RRE_INT(), RRE_INT():
@@ -263,7 +259,7 @@ def RRE_PLUS(
 def lexicographical_comparison(
     lst1: immutable_list[RRE_VALUE],
     lst2: immutable_list[RRE_VALUE],
-    functions: ImmutableMappingWithIdx[funcname, FunctionDef],
+    functions: ImmutableMappingViewWithIdx[funcname, FunctionDef],
 ) -> int:
     for item1, item2 in zip(lst1, lst2):
         result = value_comparison(item1, item2, functions)
@@ -281,7 +277,7 @@ def lexicographical_comparison(
 def value_comparison(
     val1: RRE_VALUE,
     val2: RRE_VALUE,
-    functions: ImmutableMappingWithIdx[funcname, FunctionDef],
+    functions: ImmutableMappingViewWithIdx[funcname, FunctionDef],
 ) -> int:
     match val1, val2:
         case RRE_INT(), RRE_INT():
@@ -334,7 +330,7 @@ def value_comparison(
 def list_difference(
     list1: immutable_list[RRE_VALUE],
     list2: immutable_list[RRE_VALUE],
-    functions: ImmutableMappingWithIdx[funcname, FunctionDef],
+    functions: ImmutableMappingViewWithIdx[funcname, FunctionDef],
 ) -> immutable_list[RRE_VALUE]:
     lst1: list[RRE_VALUE] = list(list1)
     lst2: list[RRE_VALUE] = list(list2)
@@ -365,7 +361,7 @@ def try_clamp_lst_idx(val: int, lst_len: int) -> None | int:
 def RRE_MINUS(
     val1: RRE_VALUE,
     val2: RRE_VALUE,
-    functions: ImmutableMappingWithIdx[funcname, FunctionDef],
+    functions: ImmutableMappingViewWithIdx[funcname, FunctionDef],
 ) -> RRE_VALUE:
     match val1, val2:
         case RRE_INT(), RRE_INT():
@@ -442,7 +438,7 @@ def is_truthy(val: RRE_VALUE) -> bool:
 def RRE_COMPARE(
     val1: RRE_VALUE,
     val2: RRE_VALUE,
-    functions: ImmutableMappingWithIdx[funcname, FunctionDef],
+    functions: ImmutableMappingViewWithIdx[funcname, FunctionDef],
 ) -> RRE_VALUE:
     if isinstance(val1, RRE_ERROR) and isinstance(val2, RRE_ERROR):
         return RRE_ERROR(f"{val1.msg}|{val2.msg}")
@@ -457,7 +453,7 @@ def RRE_COMPARE(
 def RRE_CONDITION(
     val1: RRE_VALUE,
     val2: RRE_THUNK,
-    _: ImmutableMappingWithIdx[funcname, FunctionDef],
+    _: ImmutableMappingViewWithIdx[funcname, FunctionDef],
 ) -> RRE_VALUE:
     if isinstance(val1, RRE_ERROR):
         return val1
@@ -467,3 +463,26 @@ def RRE_CONDITION(
 
     evaluated = evaluate_thunk(val2)  # TODO
     return evaluated
+
+
+@dataclass
+class ExpressionStackFrame:
+    expr: Expr
+    bindings: ImmutableMappingViewWithIdx[str, RRE_VALUE]
+    evaluated_args: list[RRE_VALUE] = field(default_factory=list)
+
+
+@dataclass
+class FunctionStackFrame:
+    funcname: funcname
+    bindings: dict[str, RRE_VALUE] = field(default_factory=dict)
+    ret_val: None | RRE_VALUE = None
+
+
+@dataclass
+class ProgramStack:
+    program: Program
+    call_stack: list[FunctionStackFrame | ExpressionStackFrame] = field(
+        default_factory=list
+    )
+    final_value: None | RRE_VALUE = None

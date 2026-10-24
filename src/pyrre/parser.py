@@ -4,7 +4,7 @@ from pyrre.types import (
     Program,
     FunctionDef,
     FUNC_MODS,
-    ExprLine,
+    BindingLine,
     Expr,
     RRE_INT,
     RRE_LIST,
@@ -15,9 +15,9 @@ from pyrre.types import (
     RRE_VALUE,
     funcname,
     OMMITTED_ARG,
-    ReturnExpr,
-    ImmutableMappingWithIdx,
+    ImmutableMappingViewWithIdx,
     immutable_list,
+    RETURN_BINDING,
 )
 from pyrre.static_config import (
     MAX_CHAR_REPRESENTABLE_INT,
@@ -72,7 +72,7 @@ class Parser:
         while True:
             if self.current().token_type == TokenType.EOF:
                 self.match(TokenType.EOF)
-                return Program(ImmutableMappingWithIdx(funcs))
+                return Program(ImmutableMappingViewWithIdx(funcs))
 
             func = self._parse_func()
             if func.name in funcs:
@@ -119,8 +119,8 @@ class Parser:
             mods.append(FUNC_MODS(self.current().text))
             self.match(TokenType.FUNCMOD)
 
-    def _parse_until_endfunc(self) -> immutable_list[ExprLine | ReturnExpr]:
-        lines: list[ExprLine] = []
+    def _parse_until_endfunc(self) -> immutable_list[BindingLine]:
+        lines: list[BindingLine] = []
 
         while True:
             if self.current().token_type == TokenType.RETURN:
@@ -128,7 +128,7 @@ class Parser:
                 return_expr = self._parse_expression()
                 self.match(TokenType.ENDFUNCDEF)
 
-                return tuple(lines + [ReturnExpr(return_expr)])
+                return tuple(lines + [BindingLine(RETURN_BINDING, return_expr)])
 
             lines.append(self._parse_expr_line())
 
@@ -173,11 +173,11 @@ class Parser:
 
         return tuple(exprs)
 
-    def _parse_expr_line(self) -> ExprLine:
+    def _parse_expr_line(self) -> BindingLine:
         constname = self.current().text
         self.match(TokenType.NAME)
         self.match(TokenType.EQUALS)
-        return ExprLine(constname, self._parse_expression())
+        return BindingLine(constname, self._parse_expression())
 
 
 def _check_ommitted_params_come_last(program_part: Program | Expr) -> None:
@@ -222,10 +222,10 @@ def _check_references_existing_binds(program: Program) -> None:
             if binds_referenced.difference(funcbinds):
                 raise ParserErrorException("referencing an undefined binding")
 
-            if not isinstance(line, ExprLine):
+            if not isinstance(line, BindingLine):
                 continue
 
-            funcbinds.add(line.expr_name)
+            funcbinds.add(line.bind_name)
 
 
 def _check_unique_exprs(program: Program) -> None:
@@ -234,8 +234,8 @@ def _check_unique_exprs(program: Program) -> None:
         if len(params) != len(func.param_names):
             raise ParserErrorException("Non-unique func param names")
 
-        lines = set(l.expr_name for l in func.lines if isinstance(l, ExprLine))
-        if len(lines) != len(func.lines) - 1:
+        lines = set(l.bind_name for l in func.lines if isinstance(l, BindingLine))
+        if len(lines) != len(func.lines):
             raise ParserErrorException("Non-unique func binding names")
 
         allbinds = params.union(lines)
