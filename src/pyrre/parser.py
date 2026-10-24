@@ -1,3 +1,5 @@
+from typing import Iterator
+
 from pyrre.types import (
     Token,
     TokenType,
@@ -28,6 +30,13 @@ from pyrre.static_config import (
     MIN_INT,
     MAX_LIST_LENGTH,
 )
+
+
+def finite_while(i: int = 100000) -> Iterator[None]:
+    for _ in range(i):
+        yield
+
+    raise Exception("went to the limit in finite_while")
 
 
 def parse_RRE_string(text: str) -> RRE_LIST:
@@ -71,7 +80,7 @@ class Parser:
 
     def _parse_funcs(self) -> Program:
         funcs: dict[funcname, FunctionDef] = {}
-        while True:
+        for _ in finite_while():
             if self.current().token_type == TokenType.EOF:
                 self.match(TokenType.EOF)
                 return Program(FunctionMappingView(funcs))
@@ -81,6 +90,8 @@ class Parser:
                 raise ParserErrorException(f"{func.name} defined more than once")
 
             funcs[func.name] = func
+
+        raise ParserErrorException("Went over finite iteration limit")
 
     def _parse_func(self) -> FunctionDef:
         self.match(TokenType.FUNCDEF)
@@ -99,7 +110,7 @@ class Parser:
 
         params: list[str] = []
 
-        while True:
+        for _ in finite_while():
             if self.current().token_type == TokenType.RIGHTPAR:
                 self.match(TokenType.RIGHTPAR)
                 return tuple(params)
@@ -113,18 +124,22 @@ class Parser:
                 self.match(TokenType.RIGHTPAR)
                 return tuple(params)
 
+        raise ParserErrorException("Went over finite iteration limit")
+
     def _parse_func_mods(self) -> immutable_list[FUNC_MODS]:
         mods: list[FUNC_MODS] = []
-        while True:
+        for _ in finite_while():
             if self.current().token_type != TokenType.FUNCMOD:
                 return tuple(mods)
             mods.append(FUNC_MODS(self.current().text))
             self.match(TokenType.FUNCMOD)
 
+        raise ParserErrorException("Went over finite iteration limit")
+
     def _parse_until_endfunc(self) -> immutable_list[BindingLine]:
         lines: list[BindingLine] = []
 
-        while True:
+        for _ in finite_while():
             if self.current().token_type == TokenType.RETURN:
                 self.match(TokenType.RETURN)
                 return_expr = self._parse_expression()
@@ -133,6 +148,8 @@ class Parser:
                 return tuple(lines + [BindingLine(RETURN_BINDING, return_expr)])
 
             lines.append(self._parse_expr_line())
+
+        raise ParserErrorException("Went over finite iteration limit")
 
     def _parse_expression(self) -> Expr:
         text = self.current().text
@@ -165,7 +182,7 @@ class Parser:
             return tuple()
 
         exprs: list[Expr] = []
-        while True:
+        for _ in finite_while():
             exprs.append(self._parse_expression())
             if self.current().token_type == TokenType.COMMA:
                 self.match(TokenType.COMMA)
