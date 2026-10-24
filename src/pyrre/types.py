@@ -92,7 +92,7 @@ class RRE_LIST:
 
 @dataclass(frozen=True)
 class RRE_THUNK:
-    funcref: Call
+    funcname: funcname
     arguments: list[RRE_VALUE | None]
 
 
@@ -101,8 +101,8 @@ class RRE_ERROR:
     msg: str
 
 
-RRE_VALUE: TypeAlias = RRE_INT | RRE_LIST | RRE_THUNK
-RRE_TYPE: TypeAlias = type[RRE_INT] | type[RRE_LIST] | type[RRE_THUNK]
+RRE_VALUE: TypeAlias = RRE_INT | RRE_LIST | RRE_THUNK | RRE_ERROR
+RRE_TYPE: TypeAlias = type[RRE_INT] | type[RRE_LIST] | type[RRE_THUNK] | type[RRE_ERROR]
 
 
 class FUNC_MODS(enum.Enum):
@@ -127,9 +127,14 @@ Expr: TypeAlias = Var | RRE_VALUE | Call
 
 
 @dataclass(frozen=True)
-class Line:
+class VarLine:
     varname: str
-    value: Expr
+    expr: Expr
+
+
+@dataclass(frozen=True)
+class ReturnValue:
+    expr: Expr
 
 
 @dataclass(frozen=True)
@@ -137,32 +142,9 @@ class FunctionDef:
     name: funcname
     modifiers: list[FUNC_MODS]
     params: list[str]
-    lines: list[Line]
-    return_expr: Expr
+    lines: list[VarLine | ReturnValue]
 
 
 @dataclass(frozen=True)
 class Program:
     functions: MappingProxyType[funcname, FunctionDef]
-
-
-@dataclass(frozen=True)
-class StackFrame:
-    evaluator: funcname | Call
-    local_vars: dict[str, RRE_VALUE]
-    evaluated_part_values: list[RRE_VALUE] = field(default_factory=list)
-
-    def copy_frame(self) -> StackFrame:
-        return StackFrame(self.evaluator, self.local_vars, self.evaluated_part_values)
-
-
-@dataclass
-class CallStack:
-    program: Program
-    frames: list[StackFrame] = field(default_factory=list)
-    final_value: None | RRE_VALUE = None
-
-    def copy_stack(self) -> CallStack:
-        return CallStack(
-            self.program, [f.copy_frame() for f in self.frames], self.final_value
-        )

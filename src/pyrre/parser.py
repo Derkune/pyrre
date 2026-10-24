@@ -6,7 +6,7 @@ from pyrre.types import (
     Program,
     FunctionDef,
     FUNC_MODS,
-    Line,
+    VarLine,
     Expr,
     RRE_INT,
     RRE_LIST,
@@ -17,6 +17,7 @@ from pyrre.types import (
     RRE_VALUE,
     funcname,
     OMMITTED_ARG,
+    ReturnValue,
 )
 from pyrre.static_config import (
     MAX_CHAR_REPRESENTABLE_INT,
@@ -87,9 +88,9 @@ class Parser:
 
         params = self._parse_params()
         mods = self._parse_func_mods()
-        body = self._parse_until_endfunc()
+        lines = self._parse_until_endfunc()
 
-        return FunctionDef(name, mods, params, *body)
+        return FunctionDef(name, mods, params, lines)
 
     def _parse_params(self) -> list[str]:
         self.match(TokenType.LEFTPAR)
@@ -118,8 +119,8 @@ class Parser:
             mods.append(FUNC_MODS(self.current().text))
             self.match(TokenType.FUNCMOD)
 
-    def _parse_until_endfunc(self) -> tuple[list[Line], Expr]:
-        lines: list[Line] = []
+    def _parse_until_endfunc(self) -> list[VarLine | ReturnValue]:
+        lines: list[VarLine] = []
 
         while True:
             if self.current().token_type == TokenType.RETURN:
@@ -127,7 +128,7 @@ class Parser:
                 return_expr = self._parse_expression()
                 self.match(TokenType.ENDFUNCDEF)
 
-                return lines, return_expr
+                return lines + [ReturnValue(return_expr)]
 
             lines.append(self._parse_constant_line())
 
@@ -172,19 +173,18 @@ class Parser:
 
         return exprs
 
-    def _parse_constant_line(self) -> Line:
+    def _parse_constant_line(self) -> VarLine:
         constname = self.current().text
         self.match(TokenType.NAME)
         self.match(TokenType.EQUALS)
-        return Line(constname, self._parse_expression())
+        return VarLine(constname, self._parse_expression())
 
 
 def _check_ommitted_params_come_last(program_part: Program | Expr) -> None:
     if isinstance(program_part, Program):
         for func in program_part.functions.values():
             for line in func.lines:
-                _check_ommitted_params_come_last(line.value)
-            _check_ommitted_params_come_last(func.return_expr)
+                _check_ommitted_params_come_last(line.expr)
 
     if isinstance(program_part, Call):
         encountered_ommitted: bool = False
@@ -217,9 +217,14 @@ def _check_references_existing_vars(program: Program) -> None:
     for func in program.functions.values():
         funcvars = set()
         for line in func.lines:
-            vars_referenced = _gather_vars_referenced_in_expr(line.value)
+            vars_referenced = _gather_vars_referenced_in_expr(line.expr)
+
             if vars_referenced.difference(funcvars):
                 raise ParserErrorException("referencing an undefined variable")
+
+            if not isinstance(line, VarLine):
+                continue
+
             funcvars.add(line.varname)
 
 
@@ -229,7 +234,7 @@ def _check_unique_vars(program: Program) -> None:
         if len(params) != len(func.params):
             raise ParserErrorException("Non-unique func param names")
 
-        lines = set(l.varname for l in func.lines)
+        lines = set(l.varname for l in func.lines if isinstance(l, VarLine))
         if len(lines) != len(func.lines):
             raise ParserErrorException("Non-unique func var names")
 
@@ -246,9 +251,8 @@ def _gather_func_call_names(
             for func in prog.functions.values():
                 _gather_func_call_names(func, func_calls)
         case FunctionDef() as funcdef:
-            for const in funcdef.lines:
-                _gather_func_call_names(const.value, func_calls)
-            _gather_func_call_names(funcdef.return_expr, func_calls)
+            for line in funcdef.lines:
+                _gather_func_call_names(line.expr, func_calls)
         case Call() as call:
             func_calls.add(call.funcname)
             for param in call.params:
