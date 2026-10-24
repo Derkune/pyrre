@@ -344,6 +344,15 @@ def list_difference(
     return tuple(ret_lst)
 
 
+def try_clamp(val: int, lst_len: int) -> None | int:
+    if not lst_len:
+        return None
+
+    val = min(val, lst_len)
+    val = max(val, 0)
+    return val
+
+
 def RRE_MINUS(
     val1: RRE_VALUE,
     val2: RRE_VALUE,
@@ -352,16 +361,26 @@ def RRE_MINUS(
     match val1, val2:
         case RRE_INT(), RRE_INT():
             return RRE_INT(val1.value - val2.value)
-        case RRE_INT(), RRE_LIST():  # TODO: clamp or default
-            return val2.value[val1.value]
-        case RRE_INT(), RRE_THUNK():  # TODO: clamp or default
-            return val2.arguments[val1.value]
+        case RRE_INT(), RRE_LIST():
+            lst_idx = try_clamp(val1.value, len(val2.value))
+            if lst_idx is None:
+                return val1
+            return val2.value[lst_idx]
+        case RRE_INT(), RRE_THUNK():
+            lst_idx = try_clamp(val1.value, len(val2.arguments))
+            if lst_idx is None:
+                return val1
+            return val2.arguments[lst_idx]
         case RRE_INT(), RRE_ERROR():
             return val2
         #
-        case RRE_LIST(), RRE_INT():  # TODO: clamp or default
+        case RRE_LIST(), RRE_INT():
+            lst_idx = try_clamp(val2.value, len(val1.value))
+            if lst_idx is None:
+                return val1
+
             lst = list(val1.value)
-            lst.pop(val2.value)
+            lst.pop(lst_idx)
             return RRE_LIST(tuple(lst))
         case RRE_LIST(), RRE_LIST():
             return RRE_LIST(list_difference(val1.value, val2.value, functions))
@@ -370,9 +389,13 @@ def RRE_MINUS(
         case RRE_LIST(), RRE_ERROR():
             return val2
         #
-        case RRE_THUNK(), RRE_INT():  # TODO: clamp or default
+        case RRE_THUNK(), RRE_INT():
+            lst_idx = try_clamp(val2.value, len(val1.arguments))
+            if lst_idx is None:
+                return val1
+
             lst = list(val1.arguments)
-            lst.pop(val2.value)
+            lst.pop(lst_idx)
             return RRE_THUNK(val1.funcname, tuple(lst))
         case RRE_THUNK(), RRE_LIST():
             return RRE_THUNK(
