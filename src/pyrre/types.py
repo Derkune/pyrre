@@ -3,8 +3,28 @@ from __future__ import annotations
 import string
 import enum
 from dataclasses import dataclass, field
-from typing import TypeAlias
-from types import MappingProxyType
+from typing import Iterator, TypeAlias, TypeVar, Generic
+from collections.abc import Mapping
+
+
+TK = TypeVar("TK")
+TV = TypeVar("TV")
+
+
+class ImmutableMapping(Mapping, Generic[TK, TV]):
+    def __init__(self, inp_dict: Mapping[TK, TV] | None = None) -> None:
+        self._dct: dict[TK, TV] = {}
+        if inp_dict:
+            {k: v for (k, v) in inp_dict.items()}
+
+    def __iter__(self) -> Iterator:
+        return self._dct.__iter__()
+
+    def __len__(self) -> int:
+        return self._dct.__len__()
+
+    def __getitem__(self, key: TK) -> TV:
+        return self._dct.__getitem__(key)
 
 
 funcname: TypeAlias = str
@@ -147,4 +167,4 @@ class FunctionDef:
 
 @dataclass(frozen=True)
 class Program:
-    functions: MappingProxyType[funcname, FunctionDef]
+    functions: ImmutableMapping[funcname, FunctionDef]

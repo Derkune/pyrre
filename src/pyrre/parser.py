@@ -1,5 +1,3 @@
-from types import MappingProxyType
-
 from pyrre.types import (
     Token,
     TokenType,
@@ -18,6 +16,7 @@ from pyrre.types import (
     funcname,
     OMMITTED_ARG,
     ReturnExpr,
+    ImmutableMapping,
 )
 from pyrre.static_config import (
     MAX_CHAR_REPRESENTABLE_INT,
@@ -72,7 +71,7 @@ class Parser:
         while True:
             if self.current().token_type == TokenType.EOF:
                 self.match(TokenType.EOF)
-                return Program(MappingProxyType(funcs))
+                return Program(ImmutableMapping(funcs))
 
             func = self._parse_func()
             if func.name in funcs:
