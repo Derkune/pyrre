@@ -17,6 +17,7 @@ from pyrre.types import (
     OMMITTED_ARG,
     ReturnExpr,
     ImmutableMapping,
+    immutable_list,
 )
 from pyrre.static_config import (
     MAX_CHAR_REPRESENTABLE_INT,
@@ -44,7 +45,7 @@ def parse_RRE_string(text: str) -> RRE_LIST:
     if len(chars) > MAX_LIST_LENGTH:
         raise ParserErrorException("string is too long")
 
-    return RRE_LIST(chars)
+    return RRE_LIST(tuple(chars))
 
 
 class Parser:
@@ -91,7 +92,7 @@ class Parser:
 
         return FunctionDef(name, mods, params, lines)
 
-    def _parse_params(self) -> list[str]:
+    def _parse_params(self) -> immutable_list[str]:
         self.match(TokenType.LEFTPAR)
 
         params: list[str] = []
@@ -99,7 +100,7 @@ class Parser:
         while True:
             if self.current().token_type == TokenType.RIGHTPAR:
                 self.match(TokenType.RIGHTPAR)
-                return params
+                return tuple(params)
 
             name = self.current().text
             self.match(TokenType.NAME)
@@ -108,17 +109,17 @@ class Parser:
                 self.match(TokenType.COMMA)
             else:
                 self.match(TokenType.RIGHTPAR)
-                return params
+                return tuple(params)
 
-    def _parse_func_mods(self) -> list[FUNC_MODS]:
+    def _parse_func_mods(self) -> immutable_list[FUNC_MODS]:
         mods: list[FUNC_MODS] = []
         while True:
             if self.current().token_type != TokenType.FUNCMOD:
-                return mods
+                return tuple(mods)
             mods.append(FUNC_MODS(self.current().text))
             self.match(TokenType.FUNCMOD)
 
-    def _parse_until_endfunc(self) -> list[ExprLine | ReturnExpr]:
+    def _parse_until_endfunc(self) -> immutable_list[ExprLine | ReturnExpr]:
         lines: list[ExprLine] = []
 
         while True:
@@ -127,7 +128,7 @@ class Parser:
                 return_expr = self._parse_expression()
                 self.match(TokenType.ENDFUNCDEF)
 
-                return lines + [ReturnExpr(return_expr)]
+                return tuple(lines + [ReturnExpr(return_expr)])
 
             lines.append(self._parse_expr_line())
 
@@ -142,7 +143,7 @@ class Parser:
                 return RRE_INT(int(text))
             case TokenType.CONSTEMPTYLST:
                 self.match(TokenType.CONSTEMPTYLST)
-                return RRE_LIST([])
+                return RRE_LIST(tuple())
             case TokenType.CONSTSTR:
                 self.match(TokenType.CONSTSTR)
                 return parse_RRE_string(text)
@@ -155,11 +156,11 @@ class Parser:
 
         raise ParserErrorException("Expected a constant or a subexpression")
 
-    def _parse_call_args(self) -> list[Expr]:
+    def _parse_call_args(self) -> immutable_list[Expr]:
         self.match(TokenType.LEFTPAR)
         if self.current().token_type == TokenType.RIGHTPAR:
             self.match(TokenType.RIGHTPAR)
-            return []
+            return tuple()
 
         exprs: list[Expr] = []
         while True:
@@ -170,7 +171,7 @@ class Parser:
                 self.match(TokenType.RIGHTPAR)
                 break
 
-        return exprs
+        return tuple(exprs)
 
     def _parse_expr_line(self) -> ExprLine:
         constname = self.current().text
