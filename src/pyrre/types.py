@@ -131,7 +131,10 @@ class ParserErrorException(Exception):
 
 
 class RuntimErrorException(Exception):
-    pass
+    def __init__(self, msg: str, *args: object) -> None:
+        super().__init__(msg, *args)
+
+        self.msg: str = msg
 
 
 @dataclass(frozen=True)
@@ -204,10 +207,17 @@ class Program:
     functions: ImmutableMappingWithIdx[funcname, FunctionDef]
 
 
+class RRE_TypeErrorException(Exception):
+    def __init__(self, msg: str, *args: object) -> None:
+        super().__init__(msg, *args)
+
+        self.msg: str = msg
+
+
 def RRE_PLUS(
     val1: RRE_VALUE,
     val2: RRE_VALUE,
-    functions: ImmutableMappingWithIdx[funcname, FunctionDef],
+    _: ImmutableMappingWithIdx[funcname, FunctionDef],
 ) -> RRE_VALUE:
     match val1, val2:
         case RRE_INT(), RRE_INT():
@@ -247,7 +257,7 @@ def RRE_PLUS(
             return RRE_ERROR(f"{val1.msg}|{val2.msg}")
         #
         case _:
-            raise Exception("Unknown type in RRE_PLUS")
+            raise RRE_TypeErrorException("Unknown type in RRE_PLUS")
 
 
 def value_comparison(
@@ -320,7 +330,7 @@ def value_comparison(
             return 0
         #
         case _:
-            raise Exception("Unknown type in RRE_COMPARE")
+            raise RRE_TypeErrorException("Unknown type in RRE_COMPARE")
 
 
 def list_difference(
@@ -337,6 +347,7 @@ def list_difference(
         for idx, item1 in enumerate(ret_lst):
             if value_comparison(item1, item2, functions) == 0:
                 to_remove_idx = idx
+                break
 
         if to_remove_idx is not None:
             ret_lst.pop(to_remove_idx)
@@ -344,11 +355,11 @@ def list_difference(
     return tuple(ret_lst)
 
 
-def try_clamp(val: int, lst_len: int) -> None | int:
+def try_clamp_lst_idx(val: int, lst_len: int) -> None | int:
     if not lst_len:
         return None
 
-    val = min(val, lst_len)
+    val = min(val, lst_len - 1)
     val = max(val, 0)
     return val
 
@@ -362,12 +373,12 @@ def RRE_MINUS(
         case RRE_INT(), RRE_INT():
             return RRE_INT(val1.value - val2.value)
         case RRE_INT(), RRE_LIST():
-            lst_idx = try_clamp(val1.value, len(val2.value))
+            lst_idx = try_clamp_lst_idx(val1.value, len(val2.value))
             if lst_idx is None:
                 return val1
             return val2.value[lst_idx]
         case RRE_INT(), RRE_THUNK():
-            lst_idx = try_clamp(val1.value, len(val2.arguments))
+            lst_idx = try_clamp_lst_idx(val1.value, len(val2.arguments))
             if lst_idx is None:
                 return val1
             return val2.arguments[lst_idx]
@@ -375,7 +386,7 @@ def RRE_MINUS(
             return val2
         #
         case RRE_LIST(), RRE_INT():
-            lst_idx = try_clamp(val2.value, len(val1.value))
+            lst_idx = try_clamp_lst_idx(val2.value, len(val1.value))
             if lst_idx is None:
                 return val1
 
@@ -390,7 +401,7 @@ def RRE_MINUS(
             return val2
         #
         case RRE_THUNK(), RRE_INT():
-            lst_idx = try_clamp(val2.value, len(val1.arguments))
+            lst_idx = try_clamp_lst_idx(val2.value, len(val1.arguments))
             if lst_idx is None:
                 return val1
 
@@ -419,20 +430,10 @@ def RRE_MINUS(
             return RRE_ERROR(f"{val1.msg}|{val2.msg}")
         #
         case _:
-            raise Exception("Unknown type in RRE_MINUS")
+            raise RRE_TypeErrorException("Unknown type in RRE_MINUS")
 
 
-def RRE_COMPARE(
-    val1: RRE_VALUE,
-    val2: RRE_VALUE,
-    functions: ImmutableMappingWithIdx[funcname, FunctionDef],
-) -> RRE_VALUE:
-    return val1 if value_comparison(val1, val2, functions) >= 0 else val2
-
-
-def is_truthy(
-    val: RRE_VALUE, functions: ImmutableMappingWithIdx[funcname, FunctionDef]
-) -> bool:
+def is_truthy(val: RRE_VALUE) -> bool:
     match val:
         case RRE_INT() | RRE_LIST():
             return bool(val.value)
@@ -440,12 +441,30 @@ def is_truthy(
             return True
 
 
+def RRE_COMPARE(
+    val1: RRE_VALUE,
+    val2: RRE_VALUE,
+    functions: ImmutableMappingWithIdx[funcname, FunctionDef],
+) -> RRE_VALUE:
+    if isinstance(val1, RRE_ERROR) and isinstance(val2, RRE_ERROR):
+        return RRE_ERROR(f"{val1.msg}|{val2.msg}")
+    if isinstance(val1, RRE_ERROR):
+        return val1
+    if isinstance(val2, RRE_ERROR):
+        return val2
+
+    return RRE_INT(1) if value_comparison(val1, val2, functions) >= 0 else RRE_INT(0)
+
+
 def RRE_CONDITION(
     val1: RRE_VALUE,
     val2: RRE_THUNK,
-    functions: ImmutableMappingWithIdx[funcname, FunctionDef],
+    _: ImmutableMappingWithIdx[funcname, FunctionDef],
 ) -> RRE_VALUE:
-    if is_truthy(val1, functions):
+    if isinstance(val1, RRE_ERROR):
+        return val1
+
+    if is_truthy(val1):
         return val1
 
     evaluated = evaluate_thunk(val2)  # TODO
