@@ -204,7 +204,11 @@ class Program:
     functions: ImmutableMappingWithIdx[funcname, FunctionDef]
 
 
-def RRE_PLUS(val1: RRE_VALUE, val2: RRE_VALUE) -> RRE_VALUE:
+def RRE_PLUS(
+    val1: RRE_VALUE,
+    val2: RRE_VALUE,
+    functions: ImmutableMappingWithIdx[funcname, FunctionDef],
+) -> RRE_VALUE:
     match val1, val2:
         case RRE_INT(), RRE_INT():
             return RRE_INT(val1.value + val2.value)
@@ -246,7 +250,11 @@ def RRE_PLUS(val1: RRE_VALUE, val2: RRE_VALUE) -> RRE_VALUE:
             raise Exception("Unknown type in RRE_PLUS")
 
 
-def value_comparison(val1: RRE_VALUE, val2: RRE_VALUE) -> int:
+def value_comparison(
+    val1: RRE_VALUE,
+    val2: RRE_VALUE,
+    functions: ImmutableMappingWithIdx[funcname, FunctionDef],
+) -> int:
     match val1, val2:
         case RRE_INT(), RRE_INT():
             return (
@@ -268,7 +276,7 @@ def value_comparison(val1: RRE_VALUE, val2: RRE_VALUE) -> int:
                 return -1
 
             for item1, item2 in zip(val1.value, val2.value, strict=True):
-                result = value_comparison(item1, item2)
+                result = value_comparison(item1, item2, functions)
                 if result:
                     return result
 
@@ -283,7 +291,22 @@ def value_comparison(val1: RRE_VALUE, val2: RRE_VALUE) -> int:
         case RRE_THUNK(), RRE_LIST():
             return 1
         case RRE_THUNK(), RRE_THUNK():
-            pass  # TODO: handle 2 thunks. Add function indexes to funcname?
+            if functions.get_idx(val1.funcname) > functions.get_idx(val2.funcname):
+                return 1
+            if functions.get_idx(val1.funcname) < functions.get_idx(val2.funcname):
+                return -1
+            if len(val1.arguments) > len(val2.arguments):
+                return 1
+            if len(val1.arguments) < len(val2.arguments):
+                return -1
+
+            for item1, item2 in zip(val1.arguments, val2.arguments, strict=True):
+                result = value_comparison(item1, item2, functions)
+                if result:
+                    return result
+
+            return 0
+
         case RRE_THUNK(), RRE_ERROR():
             return -1
         #
@@ -301,7 +324,9 @@ def value_comparison(val1: RRE_VALUE, val2: RRE_VALUE) -> int:
 
 
 def list_difference(
-    list1: immutable_list[RRE_VALUE], list2: immutable_list[RRE_VALUE]
+    list1: immutable_list[RRE_VALUE],
+    list2: immutable_list[RRE_VALUE],
+    functions: ImmutableMappingWithIdx[funcname, FunctionDef],
 ) -> immutable_list[RRE_VALUE]:
     lst1: list[RRE_VALUE] = list(list1)
     lst2: list[RRE_VALUE] = list(list2)
@@ -310,7 +335,7 @@ def list_difference(
     for item2 in lst2:
         to_remove_idx: None | int = None
         for idx, item1 in enumerate(ret_lst):
-            if value_comparison(item1, item2) == 0:
+            if value_comparison(item1, item2, functions) == 0:
                 to_remove_idx = idx
 
         if to_remove_idx is not None:
@@ -319,7 +344,11 @@ def list_difference(
     return tuple(ret_lst)
 
 
-def RRE_MINUS(val1: RRE_VALUE, val2: RRE_VALUE) -> RRE_VALUE:
+def RRE_MINUS(
+    val1: RRE_VALUE,
+    val2: RRE_VALUE,
+    functions: ImmutableMappingWithIdx[funcname, FunctionDef],
+) -> RRE_VALUE:
     match val1, val2:
         case RRE_INT(), RRE_INT():
             return RRE_INT(val1.value - val2.value)
@@ -335,9 +364,9 @@ def RRE_MINUS(val1: RRE_VALUE, val2: RRE_VALUE) -> RRE_VALUE:
             lst.pop(val2.value)
             return RRE_LIST(tuple(lst))
         case RRE_LIST(), RRE_LIST():
-            return RRE_LIST(list_difference(val1.value, val2.value))
+            return RRE_LIST(list_difference(val1.value, val2.value, functions))
         case RRE_LIST(), RRE_THUNK():
-            return RRE_LIST(list_difference(val1.value, val2.arguments))
+            return RRE_LIST(list_difference(val1.value, val2.arguments, functions))
         case RRE_LIST(), RRE_ERROR():
             return val2
         #
@@ -346,10 +375,13 @@ def RRE_MINUS(val1: RRE_VALUE, val2: RRE_VALUE) -> RRE_VALUE:
             lst.pop(val2.value)
             return RRE_THUNK(val1.funcname, tuple(lst))
         case RRE_THUNK(), RRE_LIST():
-            return RRE_THUNK(val1.funcname, list_difference(val1.arguments, val2.value))
+            return RRE_THUNK(
+                val1.funcname, list_difference(val1.arguments, val2.value, functions)
+            )
         case RRE_THUNK(), RRE_THUNK():
             return RRE_THUNK(
-                val1.funcname, list_difference(val1.arguments, val2.arguments)
+                val1.funcname,
+                list_difference(val1.arguments, val2.arguments, functions),
             )
         case RRE_THUNK(), RRE_ERROR():
             return val2
@@ -367,11 +399,17 @@ def RRE_MINUS(val1: RRE_VALUE, val2: RRE_VALUE) -> RRE_VALUE:
             raise Exception("Unknown type in RRE_MINUS")
 
 
-def RRE_COMPARE(val1: RRE_VALUE, val2: RRE_VALUE) -> RRE_VALUE:
-    return val1 if value_comparison(val1, val2) >= 0 else val2
+def RRE_COMPARE(
+    val1: RRE_VALUE,
+    val2: RRE_VALUE,
+    functions: ImmutableMappingWithIdx[funcname, FunctionDef],
+) -> RRE_VALUE:
+    return val1 if value_comparison(val1, val2, functions) >= 0 else val2
 
 
-def is_truthy(val: RRE_VALUE) -> bool:
+def is_truthy(
+    val: RRE_VALUE, functions: ImmutableMappingWithIdx[funcname, FunctionDef]
+) -> bool:
     match val:
         case RRE_INT() | RRE_LIST():
             return bool(val.value)
@@ -379,8 +417,12 @@ def is_truthy(val: RRE_VALUE) -> bool:
             return True
 
 
-def RRE_CONDITION(val1: RRE_VALUE, val2: RRE_THUNK) -> RRE_VALUE:
-    if is_truthy(val1):
+def RRE_CONDITION(
+    val1: RRE_VALUE,
+    val2: RRE_THUNK,
+    functions: ImmutableMappingWithIdx[funcname, FunctionDef],
+) -> RRE_VALUE:
+    if is_truthy(val1, functions):
         return val1
 
     evaluated = evaluate_thunk(val2)  # TODO
