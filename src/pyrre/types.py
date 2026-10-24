@@ -26,6 +26,9 @@ class ImmutableMapping(Mapping, Generic[TK, TV]):
     def __getitem__(self, key: TK) -> TV:
         return self._dct.__getitem__(key)
 
+    def __repr__(self) -> str:
+        return "IMMUTABLE: " + self._dct.__repr__()
+
 
 funcname: TypeAlias = str
 
