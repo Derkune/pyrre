@@ -132,7 +132,7 @@ class ParserErrorException(Exception):
         self.msg: str = msg
 
 
-class RuntimErrorException(Exception):
+class RuntimeErrorException(Exception):
     def __init__(self, msg: str, *args: object) -> None:
         super().__init__(msg, *args)
 
@@ -492,8 +492,7 @@ class ExpressionStackFrame:
 class FunctionStackFrame:
     funcname: funcname
     bindings: dict[str, RRE_VALUE] = field(default_factory=dict)
-    # TODO: problem: num of existing bindings is expected to track line num, but this is
-    # untrue because args are also bindings
+    current_line: int = 0
 
 
 @dataclass

@@ -9,7 +9,7 @@ from pyrre.types import (
     FunctionDef,
     funcname,
     ImmutableMappingViewWithIdx,
-    RuntimErrorException,
+    RuntimeErrorException,
     RRE_VALUE,
     RRE_TypeErrorException,
     RETURN_BINDING,
@@ -26,10 +26,10 @@ def wrap_with_runtime_exception(func):
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except (RuntimErrorException, RRE_TypeErrorException) as expected:
+        except (RuntimeErrorException, RRE_TypeErrorException) as expected:
             raise expected
         except Exception as err:
-            raise RuntimErrorException(f"Error in '{func.__name__}': {err}") from err
+            raise RuntimeErrorException(f"Error in '{func.__name__}': {err}") from err
 
     return wrapper
 
@@ -40,7 +40,7 @@ def find_main(function_names: Iterable[funcname]) -> funcname:
         if name.lower() == "main":
             return name
 
-    raise RuntimErrorException("Can't find main")
+    raise RuntimeErrorException("Can't find main")
 
 
 @wrap_with_runtime_exception
@@ -70,23 +70,35 @@ def construct_function_call_frame(
 
 @wrap_with_runtime_exception
 def handle_value_from_top_of_stack(val: RRE_VALUE, stack: ProgramStack) -> None:
+    if not stack.call_stack:
+        stack.final_value = val
+        return
+
     stack.call_stack.pop(-1)
     top_frame = stack.call_stack[-1]
 
     if isinstance(top_frame, FunctionStackFrame):
         function = stack.program.functions[top_frame.funcname]
 
-        if not isinstance(function, FunctionDef):
-            raise RuntimErrorException(
-                f"unexpected symbol {function} in handle_value_from_top_of_stack"
-            )
-
-        line = function.lines[len(top_frame.bindings)]
+        line = function.lines[top_frame.current_line]
         top_frame.bindings[line.bind_name] = val
+        top_frame.current_line += 1
     elif isinstance(top_frame, ExpressionStackFrame):
         top_frame.evaluated_args.append(val)
     else:
-        raise RuntimErrorException("Unkown type of a frame in call stack")
+        raise RuntimeErrorException("Unkown type of a frame in call stack")
+
+
+@wrap_with_runtime_exception
+def handle_value_from_return_of_function(val: RRE_VALUE, stack: ProgramStack) -> None:
+    top_frame = stack.call_stack[-1]
+    if not isinstance(top_frame, FunctionStackFrame):
+        raise RuntimeErrorException(
+            "handle_value_from_return_of_function assumed to come from FunctionStackFrame"
+        )
+
+    stack.call_stack.pop(-1)
+    handle_value_from_top_of_stack(val, stack)
 
 
 @wrap_with_runtime_exception
@@ -110,7 +122,7 @@ def handle_primitive_op_call(
         return
 
     if len(evaluated_args) > EXPECTED_AMOUNT_OF_ARGS_IN_PRIMITIVE:
-        raise RuntimErrorException(
+        raise RuntimeErrorException(
             f"expected {EXPECTED_AMOUNT_OF_ARGS_IN_PRIMITIVE} args for a primitive func, got {len(evaluated_args)}"
         )
 
@@ -137,7 +149,7 @@ def handle_func_call(
         return
 
     if len(evaluated_args) > len(func.param_names):
-        raise RuntimErrorException(
+        raise RuntimeErrorException(
             "more than expected amount of args in handle_func_call"
         )
 
@@ -163,7 +175,7 @@ def process_expression_frame(frame: ExpressionStackFrame, stack: ProgramStack) -
 
         handle_func_call(frame.expr, frame.evaluated_args, frame.bindings, stack)
     else:
-        raise RuntimErrorException(
+        raise RuntimeErrorException(
             "unknown type in frame.expr in process_statement_frame"
         )
 
@@ -172,16 +184,14 @@ def process_expression_frame(frame: ExpressionStackFrame, stack: ProgramStack) -
 def process_function_frame(frame: FunctionStackFrame, stack: ProgramStack) -> None:
     function = stack.program.functions[frame.funcname]
 
-    expected_binding_num = len(function.lines) + len(function.param_names)
-
-    if len(frame.bindings) == expected_binding_num:
-        handle_value_from_top_of_stack(frame.bindings[RETURN_BINDING], stack)
+    if frame.current_line == len(function.lines):
+        handle_value_from_return_of_function(frame.bindings[RETURN_BINDING], stack)
         return
 
-    if len(frame.bindings) > expected_binding_num:
-        raise RuntimErrorException("too many bindings in process_function_frame")
+    if frame.current_line > len(function.lines):
+        raise RuntimeErrorException("too many bindings in process_function_frame")
 
-    pending_line: BindingLine = function.lines[len(frame.bindings)]
+    pending_line: BindingLine = function.lines[frame.current_line]
     stack.call_stack.append(
         ExpressionStackFrame(
             pending_line.expr, ImmutableMappingViewWithIdx(frame.bindings)
@@ -203,6 +213,6 @@ def execute_step(stack: ProgramStack) -> ProgramStack:
     elif isinstance(top_frame, ExpressionStackFrame):
         process_expression_frame(top_frame, stack)
     else:
-        raise RuntimErrorException("Unkown type of a frame in call stack")
+        raise RuntimeErrorException("Unkown type of a frame in call stack")
 
     return stack
