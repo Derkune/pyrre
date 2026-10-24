@@ -215,17 +215,17 @@ def _gather_bindss_referenced_in_expr(expr: Expr) -> set[str]:
 
 def _check_references_existing_binds(program: Program) -> None:
     for func in program.functions.values():
-        funcexprs = set()
+        funcbinds = set(func.param_names).union(OMMITTED_ARG)
         for line in func.lines:
-            bindss_referenced = _gather_bindss_referenced_in_expr(line.expr)
+            binds_referenced = _gather_bindss_referenced_in_expr(line.expr)
 
-            if bindss_referenced.difference(funcexprs):
+            if binds_referenced.difference(funcbinds):
                 raise ParserErrorException("referencing an undefined binding")
 
             if not isinstance(line, ExprLine):
                 continue
 
-            funcexprs.add(line.expr_name)
+            funcbinds.add(line.expr_name)
 
 
 def _check_unique_exprs(program: Program) -> None:
@@ -235,7 +235,7 @@ def _check_unique_exprs(program: Program) -> None:
             raise ParserErrorException("Non-unique func param names")
 
         lines = set(l.expr_name for l in func.lines if isinstance(l, ExprLine))
-        if len(lines) != len(func.lines):
+        if len(lines) != len(func.lines) - 1:
             raise ParserErrorException("Non-unique func binding names")
 
         allbinds = params.union(lines)
