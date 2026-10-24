@@ -16,7 +16,7 @@ from pyrre.types import (
     funcname,
     OMMITTED_ARG,
     ReturnExpr,
-    ImmutableMapping,
+    ImmutableMappingWithIdx,
     immutable_list,
 )
 from pyrre.static_config import (
@@ -72,7 +72,7 @@ class Parser:
         while True:
             if self.current().token_type == TokenType.EOF:
                 self.match(TokenType.EOF)
-                return Program(ImmutableMapping(funcs))
+                return Program(ImmutableMappingWithIdx(funcs))
 
             func = self._parse_func()
             if func.name in funcs:

@@ -3,7 +3,15 @@ from __future__ import annotations
 import string
 import enum
 from dataclasses import dataclass, field
-from typing import Iterator, TypeAlias, TypeVar, Generic
+from typing import (
+    ItemsView,
+    Iterator,
+    TypeAlias,
+    TypeVar,
+    Generic,
+    KeysView,
+    ValuesView,
+)
 from collections.abc import Mapping
 import copy
 
@@ -12,11 +20,27 @@ TK = TypeVar("TK")
 TV = TypeVar("TV")
 
 
-class ImmutableMapping(Mapping, Generic[TK, TV]):
+class ImmutableMappingWithIdx(Mapping, Generic[TK, TV]):
     def __init__(self, inp_dict: Mapping[TK, TV] | None = None) -> None:
         self._dct: dict[TK, TV] = {}
         if inp_dict:
-            {k: v for (k, v) in inp_dict.items()}
+            self._dct = {k: v for (k, v) in inp_dict.items()}
+
+    def get_idx(self, k: TK) -> int:
+        for idx, key in enumerate(self._dct.keys()):
+            if key == k:
+                return idx
+
+        raise KeyError(k)
+
+    def keys(self) -> KeysView[TK]:
+        return self._dct.keys()
+
+    def values(self) -> ValuesView[TV]:
+        return self._dct.values()
+
+    def items(self) -> ItemsView[TK, TV]:
+        return self._dct.items()
 
     def __iter__(self) -> Iterator:
         return self._dct.__iter__()
@@ -177,7 +201,7 @@ class FunctionDef:
 
 @dataclass(frozen=True)
 class Program:
-    functions: ImmutableMapping[funcname, FunctionDef]
+    functions: ImmutableMappingWithIdx[funcname, FunctionDef]
 
 
 def RRE_PLUS(val1: RRE_VALUE, val2: RRE_VALUE) -> RRE_VALUE:
