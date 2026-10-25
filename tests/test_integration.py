@@ -5,11 +5,14 @@ from pyrre.types import (
     RRE_LIST,
     RRE_INT,
     RRE_ERROR,
+    RRE_THUNK,
     ParserErrorException,
     LexerErrorException,
+    RuntimeErrorException,
     Token,
     TokenType,
 )
+from pyrre.static_config import MAX_LIST_LENGTH, MAX_LIST_NESTING_DEPTH
 from pyrre.lexer import lex
 from pyrre.parser import parse
 from pyrre.runtime import execute_step
@@ -437,6 +440,128 @@ def test_error_string_literal_too_long() -> None:
         run_program(code)
 
 
+def test_append_to_max_length_list_is_noop() -> None:
+    code = """
+    func main()
+        full = "ABCDEFGHIJKLMNOP"
+        return +(full, 81)
+    endfunc
+    """
+    expected = RRE_LIST(tuple(RRE_INT(ord(c)) for c in "ABCDEFGHIJKLMNOP"))
+    assert run_program(code) == expected
+
+
+def test_prepend_to_max_length_list_is_noop() -> None:
+    code = """
+    func main()
+        full = "ABCDEFGHIJKLMNOP"
+        return +(81, full)
+    endfunc
+    """
+    expected = RRE_LIST(tuple(RRE_INT(ord(c)) for c in "ABCDEFGHIJKLMNOP"))
+    assert run_program(code) == expected
+
+
+def test_append_to_near_max_length_list_grows() -> None:
+    code = """
+    func main()
+        return +("ABCDEFGHIJKLMNO", 80)
+    endfunc
+    """
+    expected = RRE_LIST(tuple(RRE_INT(ord(c)) for c in "ABCDEFGHIJKLMNOP"))
+    assert run_program(code) == expected
+
+
+def test_add_list_to_max_length_list_is_noop() -> None:
+    code = """
+    func main()
+        full = "ABCDEFGHIJKLMNOP"
+        return +(full, "A")
+    endfunc
+    """
+    expected = RRE_LIST(tuple(RRE_INT(ord(c)) for c in "ABCDEFGHIJKLMNOP"))
+    assert run_program(code) == expected
+
+
+def test_nesting_at_max_depth_then_wrap_is_noop() -> None:
+    code = """
+    func main()
+        d1 = []
+        d2 = +([], d1)
+        d3 = +([], d2)
+        d4 = +([], d3)
+        d5 = +([], d4)
+        d6 = +([], d5)
+        d7 = +([], d6)
+        d8 = +([], d7)
+        return +([], d8)
+    endfunc
+    """
+    assert run_program(code) == RRE_LIST(())
+
+
+def test_thunk_append_and_prepend_at_max_length_are_noops() -> None:
+    code = """
+    func lazy()%
+        return 0
+    endfunc
+
+    func main()
+        t0 = lazy()
+        t1 = +(t0, 1)
+        t2 = +(t1, 1)
+        t3 = +(t2, 1)
+        t4 = +(t3, 1)
+        t5 = +(t4, 1)
+        t6 = +(t5, 1)
+        t7 = +(t6, 1)
+        t8 = +(t7, 1)
+        t9 = +(t8, 1)
+        t10 = +(t9, 1)
+        t11 = +(t10, 1)
+        t12 = +(t11, 1)
+        t13 = +(t12, 1)
+        t14 = +(t13, 1)
+        t15 = +(t14, 1)
+        t16 = +(t15, 1)
+        appended = +(t16, 2)
+        prepended = +(99, t16)
+        last_after_append = -(16, appended)
+        first_after_prepend = -(0, prepended)
+        return +(+( [], last_after_append), first_after_prepend)
+    endfunc
+    """
+    assert run_program(code) == RRE_LIST((RRE_INT(1), RRE_INT(1)))
+
+
+def test_overlong_list_construction_raises() -> None:
+    items = tuple(RRE_INT(0) for _ in range(MAX_LIST_LENGTH + 1))
+    with pytest.raises(RuntimeErrorException):
+        RRE_LIST(items)
+
+
+def test_overdeep_list_construction_raises() -> None:
+    nested: RRE_LIST = RRE_LIST(())
+    for _ in range(MAX_LIST_NESTING_DEPTH - 1):
+        nested = RRE_LIST((nested,))
+    with pytest.raises(RuntimeErrorException):
+        RRE_LIST((nested,))
+
+
+def test_overdeep_thunk_construction_raises() -> None:
+    nested: RRE_LIST = RRE_LIST(())
+    for _ in range(MAX_LIST_NESTING_DEPTH - 1):
+        nested = RRE_LIST((nested,))
+    with pytest.raises(RuntimeErrorException):
+        RRE_THUNK("f", (nested,))
+
+
+def test_overlong_thunk_construction_raises() -> None:
+    items = tuple(RRE_INT(0) for _ in range(MAX_LIST_LENGTH + 1))
+    with pytest.raises(RuntimeErrorException):
+        RRE_THUNK("f", items)
+
+
 def test_max_args_params_and_call_accepted() -> None:
     code = """
     func main()
@@ -639,6 +764,7 @@ def test_choice_truthy_does_not_evaluate_second_arg_expressions() -> None:
 
 
 def test_choice_error_does_not_enter_second_arg() -> None:
+    # TODO: adapt to new operation edge case handling
     code = """
     func main()
         bad = -(0, [])
@@ -702,6 +828,7 @@ def test_eager_return_forces_thunk_inside_list() -> None:
 
 
 def test_eager_return_list_force_infects_on_thunk_error() -> None:
+    # TODO: adapt to new operation edge case handling
     code = """
     func boxer(n)
         return +(+(5, []), lazy(n))

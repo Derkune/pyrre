@@ -16,7 +16,12 @@ from typing import (
 from collections.abc import Mapping
 import copy
 
-from pyrre.static_config import MAX_INT, MIN_INT
+from pyrre.static_config import (
+    MAX_INT,
+    MIN_INT,
+    MAX_LIST_LENGTH,
+    MAX_LIST_NESTING_DEPTH,
+)
 
 
 TK = TypeVar("TK")
@@ -145,15 +150,44 @@ class RRE_INT:
     value: int
 
 
+def _item_nesting_depth(val: RRE_VALUE) -> int:
+    if isinstance(val, (RRE_LIST, RRE_THUNK)):
+        return val.depth
+    return 0
+
+
+def _sequence_nesting_depth(items: immutable_list[RRE_VALUE]) -> int:
+    if not items:
+        return 1
+    return 1 + max(_item_nesting_depth(item) for item in items)
+
+
+def _sequence_depth_within_limits(items: immutable_list[RRE_VALUE]) -> int:
+    if len(items) > MAX_LIST_LENGTH:
+        raise RuntimeErrorException("list too long")
+    depth = _sequence_nesting_depth(items)
+    if depth > MAX_LIST_NESTING_DEPTH:
+        raise RuntimeErrorException("list nested too deeply")
+    return depth
+
+
 @dataclass(frozen=True)
 class RRE_LIST:
     value: immutable_list[RRE_VALUE]
+    depth: int = field(init=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "depth", _sequence_depth_within_limits(self.value))
 
 
 @dataclass(frozen=True)
 class RRE_THUNK:
     funcname: funcname
     arguments: immutable_list[RRE_VALUE]
+    depth: int = field(init=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "depth", _sequence_depth_within_limits(self.arguments))
 
 
 @dataclass(frozen=True)
@@ -225,32 +259,57 @@ def clamp_int(value: int) -> RRE_INT:
     return RRE_INT(min(MAX_INT, max(MIN_INT, value)))
 
 
+def _plus_exceeds_limits(
+    container_len: int, container_depth: int, item: RRE_VALUE
+) -> bool:
+    if container_len + 1 > MAX_LIST_LENGTH:
+        return True
+    new_depth = max(container_depth, 1 + _item_nesting_depth(item))
+    return new_depth > MAX_LIST_NESTING_DEPTH
+
+
+def _plus_list(container: RRE_LIST, item: RRE_VALUE, *, prepend: bool) -> RRE_LIST:
+    if _plus_exceeds_limits(len(container.value), container.depth, item):
+        return container
+    if prepend:
+        return RRE_LIST(tuple([item]) + container.value)
+    return RRE_LIST(container.value + tuple([item]))
+
+
+def _plus_thunk(container: RRE_THUNK, item: RRE_VALUE, *, prepend: bool) -> RRE_THUNK:
+    if _plus_exceeds_limits(len(container.arguments), container.depth, item):
+        return container
+    if prepend:
+        return RRE_THUNK(container.funcname, tuple([item]) + container.arguments)
+    return RRE_THUNK(container.funcname, container.arguments + tuple([item]))
+
+
 def RRE_PLUS(val1: RRE_VALUE, val2: RRE_VALUE, _: FunctionMappingView) -> RRE_VALUE:
     match val1, val2:
         case RRE_INT(), RRE_INT():
             return clamp_int(val1.value + val2.value)
         case RRE_INT(), RRE_LIST():
-            return RRE_LIST(tuple([val1]) + val2.value)
+            return _plus_list(val2, val1, prepend=True)
         case RRE_INT(), RRE_THUNK():
-            return RRE_THUNK(val2.funcname, tuple([val1]) + val2.arguments)
+            return _plus_thunk(val2, val1, prepend=True)
         case RRE_INT(), RRE_ERROR():
             return val2
         #
         case RRE_LIST(), RRE_INT():
-            return RRE_LIST(val1.value + tuple([val2]))
+            return _plus_list(val1, val2, prepend=False)
         case RRE_LIST(), RRE_LIST():
-            return RRE_LIST(val1.value + tuple([val2]))
+            return _plus_list(val1, val2, prepend=False)
         case RRE_LIST(), RRE_THUNK():
-            return RRE_LIST(val1.value + tuple([val2]))
+            return _plus_list(val1, val2, prepend=False)
         case RRE_LIST(), RRE_ERROR():
             return val2
         #
         case RRE_THUNK(), RRE_INT():
-            return RRE_THUNK(val1.funcname, val1.arguments + tuple([val2]))
+            return _plus_thunk(val1, val2, prepend=False)
         case RRE_THUNK(), RRE_LIST():
-            return RRE_THUNK(val1.funcname, val1.arguments + tuple([val2]))
+            return _plus_thunk(val1, val2, prepend=False)
         case RRE_THUNK(), RRE_THUNK():
-            return RRE_THUNK(val1.funcname, val1.arguments + tuple([val2]))
+            return _plus_thunk(val1, val2, prepend=False)
         case RRE_THUNK(), RRE_ERROR():
             return val2
         #
