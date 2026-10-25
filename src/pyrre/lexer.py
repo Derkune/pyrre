@@ -34,6 +34,9 @@ def _try_commit_accumulated(accumulated: list[str], lexed: list[Token]) -> None:
     if joined[0] in string.digits:
         raise LexerErrorException("Name can't start with digit")
 
+    if joined[0] not in string.ascii_letters:
+        raise LexerErrorException("Name must start with a letter")
+
     if not charset.issubset(NAME_CHARS):
         raise LexerErrorException("Name contains disallowed chars")
 

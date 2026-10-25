@@ -16,7 +16,6 @@ from pyrre.types import (
     PRIMITIVE_OPS,
     RRE_VALUE,
     funcname,
-    OMMITTED_ARG,
     ImmutableMappingViewWithIdx,
     immutable_list,
     RETURN_BINDING,
@@ -211,26 +210,6 @@ def _check_main_is_not_lazy(program: Program) -> None:
         raise ParserErrorException("main can't be lazy")
 
 
-def _check_ommitted_params_come_last(program_part: Program | Expr) -> None:
-    if isinstance(program_part, Program):
-        for func in program_part.functions.values():
-            for line in func.lines:
-                _check_ommitted_params_come_last(line.expr)
-
-    if isinstance(program_part, Call):
-        encountered_ommitted: bool = False
-        for param in program_part.params:
-            if isinstance(param, Binding) and param.bindname == OMMITTED_ARG:
-                encountered_ommitted = True
-                continue
-
-            if encountered_ommitted:
-                raise ParserErrorException("An ommitted arg was not last")
-
-            if isinstance(param, Call):
-                _check_ommitted_params_come_last(param)
-
-
 def _gather_bindss_referenced_in_expr(expr: Expr) -> set[str]:
     match expr:
         case Binding() as bind:
@@ -246,7 +225,7 @@ def _gather_bindss_referenced_in_expr(expr: Expr) -> set[str]:
 
 def _check_references_existing_binds(program: Program) -> None:
     for func in program.functions.values():
-        funcbinds = set(func.param_names).union(OMMITTED_ARG)
+        funcbinds = set(func.param_names)
         for line in func.lines:
             binds_referenced = _gather_bindss_referenced_in_expr(line.expr)
 
@@ -257,15 +236,6 @@ def _check_references_existing_binds(program: Program) -> None:
                 continue
 
             funcbinds.add(line.bind_name)
-
-
-def _check_reserved_ommitted_name(program: Program) -> None:
-    for func in program.functions.values():
-        if OMMITTED_ARG in func.param_names:
-            raise ParserErrorException("_ is reserved for omitted arguments")
-        for line in func.lines:
-            if line.bind_name == OMMITTED_ARG:
-                raise ParserErrorException("_ is reserved for omitted arguments")
 
 
 def _check_unique_exprs(program: Program) -> None:
@@ -341,9 +311,7 @@ def _post_parse_correctness(program: Program) -> Program:
     _check_unique_func_names_and_starting_letters(program)
     _check_calls_existing(program)
     _check_unique_exprs(program)
-    _check_reserved_ommitted_name(program)
     _check_references_existing_binds(program)
-    _check_ommitted_params_come_last(program)
     _check_main_is_not_lazy(program)
     return program
 

@@ -285,7 +285,7 @@ def test_error_parameter_named_underscore() -> None:
         return 0
     endfunc
     """
-    with pytest.raises(ParserErrorException):
+    with pytest.raises(LexerErrorException):
         run_program(code)
 
 
@@ -296,7 +296,7 @@ def test_error_binding_named_underscore() -> None:
         return 0
     endfunc
     """
-    with pytest.raises(ParserErrorException):
+    with pytest.raises(LexerErrorException):
         run_program(code)
 
 

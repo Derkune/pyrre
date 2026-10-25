@@ -65,14 +65,13 @@ immutable_list: TypeAlias = tuple[T, ...]
 funcname: TypeAlias = str
 
 
-OMMITTED_ARG: str = "_"
 NAME_CHARS: frozenset[str] = frozenset(
     char
     for collection in [
         string.ascii_letters,
         [c.upper() for c in string.ascii_letters],
         string.digits,
-        OMMITTED_ARG,
+        "_",
     ]
     for char in collection
 )
