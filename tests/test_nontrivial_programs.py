@@ -204,3 +204,56 @@ def test_multiply(a: int, b: int, expected: int) -> None:
         to_dump_history=False,
     )
     assert result == RRE_INT(expected)
+
+
+CAPS: str = """
+func main(items)
+    return caps(items)
+endfunc
+
+func caps(items)
+    empty = >([], items)
+    index = -(1, empty)
+    base = +([], [])
+    recur = ?(
+        empty,
+        +(
+            up(-(0, items)),
+            caps(-(items, 0))
+        )
+    )
+    choices = +(base, recur)
+    return -(index, choices)
+endfunc
+
+func up(n)
+    lo = >(n, 97)
+    hi = >(122, n)
+    islo = >(+(lo, hi), 2)
+    upper = -(n, 32)
+    pick = -(1, islo)
+    choices = +(+(upper, []), n)
+    return -(pick, choices)
+endfunc
+"""
+
+
+@pytest.mark.parametrize(
+    "values, expected",
+    [
+        ([], []),
+        ([97], [65]),
+        ([122], [90]),
+        ([96, 97, 122, 123], [96, 65, 90, 123]),
+        ([65, 90, 32, 48, 0, -1], [65, 90, 32, 48, 0, -1]),
+        ([ord(c) for c in "PyRRE!"], [ord(c) for c in "PYRRE!"]),
+    ],
+)
+def test_caps(values: list[int], expected: list[int]) -> None:
+    result = run_program(
+        CAPS,
+        inputs=[_int_list(values)],
+        max_steps=10000,
+        to_dump_history=False,
+    )
+    assert result == _int_list(expected)
