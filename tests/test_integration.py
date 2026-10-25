@@ -222,11 +222,11 @@ def test_function_modifiers_and_distinct_letters() -> None:
         return beta(res)
     endfunc
 
-    func alpha(a, b)#!%
+    func alpha(a, b)#!
         return +(a, b)
     endfunc
 
-    func beta(v)%
+    func beta(v)
         return -(v, 5)
     endfunc
     """
