@@ -4,6 +4,7 @@ from pyrre.types import (
     ProgramStack,
     RRE_LIST,
     RRE_INT,
+    RRE_ERROR,
     ParserErrorException,
     LexerErrorException,
 )
@@ -365,6 +366,87 @@ def test_choice_truthy_does_not_enter_second_arg() -> None:
     code = """
     func main()
         return ?(1, rec(1))
+    endfunc
+
+    func rec(n)
+        return rec(n)
+    endfunc
+    """
+    assert run_program(code) == RRE_INT(1)
+
+
+def test_choice_falsy_evaluates_primitive_second_arg() -> None:
+    code = """
+    func main()
+        return ?(0, +(1, 1))
+    endfunc
+    """
+    assert run_program(code) == RRE_INT(2)
+
+
+def test_choice_falsy_evaluates_user_function_second_arg() -> None:
+    code = """
+    func main()
+        return ?(0, addone(1))
+    endfunc
+
+    func addone(n)
+        return +(n, 1)
+    endfunc
+    """
+    assert run_program(code) == RRE_INT(2)
+
+
+def test_choice_falsy_returns_non_call_second_arg() -> None:
+    code = """
+    func main()
+        int_branch = ?(0, 5)
+        empty_branch = ?([], [])
+        return +(+([], int_branch), empty_branch)
+    endfunc
+    """
+    expected = RRE_LIST((RRE_INT(5), RRE_LIST(())))
+    assert run_program(code) == expected
+
+
+def test_choice_falsy_forces_lazy_function_body() -> None:
+    code = """
+    func main()
+        return ?(0, lazy(1, 2))
+    endfunc
+
+    func lazy(a, b)%
+        return +(a, b)
+    endfunc
+    """
+    assert run_program(code) == RRE_INT(3)
+
+
+def test_choice_wrong_arity_thunk_is_error() -> None:
+    code = """
+    func main()
+        t = lazy(1, 2)
+        extra = +(t, 3)
+        return ?(0, extra)
+    endfunc
+
+    func lazy(a, b)%
+        return +(a, b)
+    endfunc
+    """
+    result = run_program(code)
+    assert isinstance(result, RRE_ERROR)
+    assert result.msg == "wrong number of arguments"
+
+
+def test_choice_thunk_condition_does_not_enter_second_arg() -> None:
+    code = """
+    func main()
+        return -(0, ?(lazy(1), rec(1)))
+    endfunc
+
+    func lazy(a)%
+        return a
     endfunc
 
     func rec(n)

@@ -160,6 +160,11 @@ class RRE_ERROR:
     msg: str
 
 
+@dataclass(frozen=True)
+class RRE_FORCE_THUNK:
+    thunk: RRE_THUNK
+
+
 RRE_VALUE: TypeAlias = RRE_INT | RRE_LIST | RRE_THUNK | RRE_ERROR
 RRE_TYPE: TypeAlias = type[RRE_INT] | type[RRE_LIST] | type[RRE_THUNK] | type[RRE_ERROR]
 
@@ -449,20 +454,19 @@ def RRE_COMPARE(
 
 def RRE_CONDITION(
     val1: RRE_VALUE, val2: RRE_VALUE, _: FunctionMappingView
-) -> RRE_VALUE:
-    if isinstance(val1, RRE_ERROR):
-        return val1
-
+) -> RRE_VALUE | RRE_FORCE_THUNK:
     if is_truthy(val1):
         return val1
 
-    evaluated = evaluate_thunk(val2)  # TODO
-    return evaluated
+    if isinstance(val2, RRE_THUNK):
+        return RRE_FORCE_THUNK(val2)
+
+    return val2
 
 
 EXPECTED_AMOUNT_OF_ARGS_IN_PRIMITIVE: int = 2
 PrimitiveOpSignature: TypeAlias = Callable[
-    [RRE_VALUE, RRE_VALUE, FunctionMappingView], RRE_VALUE
+    [RRE_VALUE, RRE_VALUE, FunctionMappingView], RRE_VALUE | RRE_FORCE_THUNK
 ]
 
 

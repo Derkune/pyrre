@@ -19,6 +19,8 @@ from pyrre.types import (
     PRIMITIVE_OPS,
     EXPECTED_AMOUNT_OF_ARGS_IN_PRIMITIVE,
     RRE_THUNK,
+    RRE_ERROR,
+    RRE_FORCE_THUNK,
     FUNC_MODS,
 )
 
@@ -100,20 +102,61 @@ def handle_value_from_return_of_function(val: RRE_VALUE, stack: ProgramStack) ->
     handle_value_from_top_of_stack(val, stack)
 
 
+def schedule_forced_thunk(thunk: RRE_THUNK, stack: ProgramStack) -> None:
+    top_frame = stack.call_stack[-1]
+    if not isinstance(top_frame, ExpressionStackFrame):
+        raise RuntimeErrorException(
+            "schedule_forced_thunk assumed to come from ExpressionStackFrame"
+        )
+
+    arg_count = len(thunk.arguments)
+    if thunk.funcname in PRIMITIVE_OPS:
+        if arg_count != EXPECTED_AMOUNT_OF_ARGS_IN_PRIMITIVE:
+            handle_value_from_top_of_stack(
+                RRE_ERROR("wrong number of arguments"), stack
+            )
+            return
+
+        stack.call_stack.pop(-1)
+        stack.call_stack.append(
+            ExpressionStackFrame(
+                Call(thunk.funcname, ()),
+                top_frame.caller_func,
+                top_frame.bindings,
+                evaluated_args=list(thunk.arguments),
+            )
+        )
+        return
+    
+    func = stack.program.functions[thunk.funcname]
+    if arg_count != len(func.param_names):
+        handle_value_from_top_of_stack(RRE_ERROR("wrong number of arguments"), stack)
+        return
+
+    stack.call_stack.append(
+        construct_function_call_frame(
+            call=Call(thunk.funcname, ()),
+            evaluated_args=list(thunk.arguments),
+            func=func,
+        )
+    )
+
+
 def response_if_op_args_evaluated(
     *, funcname: funcname, evaluated_args: list[RRE_VALUE], stack: ProgramStack
 ) -> Callable[[], None]:
     def response() -> None:
         func = PRIMITIVE_OPS[funcname]
-
-        handle_value_from_top_of_stack(
-            func(
-                evaluated_args[0],
-                evaluated_args[1],
-                stack.program.functions,
-            ),
-            stack,
+        result = func(
+            evaluated_args[0],
+            evaluated_args[1],
+            stack.program.functions,
         )
+        if isinstance(result, RRE_FORCE_THUNK):
+            schedule_forced_thunk(result.thunk, stack)
+            return
+
+        handle_value_from_top_of_stack(result, stack)
 
     return response
 
