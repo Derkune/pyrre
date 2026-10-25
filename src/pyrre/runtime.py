@@ -6,6 +6,7 @@ from pyrre.types import (
     ProgramStack,
     FunctionStackFrame,
     ExpressionStackFrame,
+    ForceFrame,
     FunctionDef,
     funcname,
     ImmutableMappingViewWithIdx,
@@ -21,7 +22,10 @@ from pyrre.types import (
     RRE_THUNK,
     RRE_ERROR,
     RRE_FORCE_THUNK,
+    RRE_INT,
+    RRE_LIST,
     FUNC_MODS,
+    is_truthy,
 )
 
 
@@ -68,15 +72,75 @@ def construct_function_call_frame(
     return FunctionStackFrame(call.funcname, arg_vals)
 
 
-def handle_value_from_top_of_stack(val: RRE_VALUE, stack: ProgramStack) -> None:
-    if not stack.call_stack:
-        if isinstance(val, RRE_THUNK):
-            raise RuntimeErrorException("Thunk not allowed as a program return")
+def value_contains_thunk(val: RRE_VALUE) -> bool:
+    match val:
+        case RRE_THUNK():
+            return True
+        case RRE_LIST():
+            return any(value_contains_thunk(item) for item in val.value)
+        case _:
+            return False
 
-        stack.final_value = val
+
+def thunk_arity_error(thunk: RRE_THUNK, stack: ProgramStack) -> RRE_ERROR | None:
+    arg_count = len(thunk.arguments)
+    if thunk.funcname in PRIMITIVE_OPS:
+        if arg_count != EXPECTED_AMOUNT_OF_ARGS_IN_PRIMITIVE:
+            return RRE_ERROR("wrong number of arguments")
+        return None
+
+    func = stack.program.functions[thunk.funcname]
+    if arg_count != len(func.param_names):
+        return RRE_ERROR("wrong number of arguments")
+    return None
+
+
+def push_thunk_evaluation(thunk: RRE_THUNK, stack: ProgramStack) -> None:
+    if thunk.funcname in PRIMITIVE_OPS:
+        stack.call_stack.append(
+            ExpressionStackFrame(
+                Call(thunk.funcname, ()),
+                "",
+                ImmutableMappingViewWithIdx(),
+                evaluated_args=list(thunk.arguments),
+            )
+        )
         return
 
-    stack.call_stack.pop(-1)
+    func = stack.program.functions[thunk.funcname]
+    stack.call_stack.append(
+        construct_function_call_frame(
+            call=Call(thunk.funcname, ()),
+            evaluated_args=list(thunk.arguments),
+            func=func,
+        )
+    )
+
+
+def set_program_result(val: RRE_VALUE, stack: ProgramStack) -> None:
+    if isinstance(val, RRE_THUNK):
+        raise RuntimeErrorException("Thunk not allowed as a program return")
+
+    stack.final_value = val
+
+
+def receive_into_force_frame(frame: ForceFrame, val: RRE_VALUE) -> None:
+    if isinstance(frame.value, RRE_LIST):
+        if isinstance(val, RRE_ERROR):
+            frame.value = val
+            frame.forced_items = []
+        else:
+            frame.forced_items.append(val)
+        return
+
+    frame.value = val
+
+
+def deliver_to_parent(val: RRE_VALUE, stack: ProgramStack) -> None:
+    if not stack.call_stack:
+        set_program_result(val, stack)
+        return
+
     top_frame = stack.call_stack[-1]
 
     if isinstance(top_frame, FunctionStackFrame):
@@ -87,8 +151,32 @@ def handle_value_from_top_of_stack(val: RRE_VALUE, stack: ProgramStack) -> None:
         top_frame.current_line += 1
     elif isinstance(top_frame, ExpressionStackFrame):
         top_frame.evaluated_args.append(val)
+    elif isinstance(top_frame, ForceFrame):
+        receive_into_force_frame(top_frame, val)
     else:
         raise RuntimeErrorException("Unkown type of a frame in call stack")
+
+
+def handle_value_from_top_of_stack(val: RRE_VALUE, stack: ProgramStack) -> None:
+    if not stack.call_stack:
+        set_program_result(val, stack)
+        return
+
+    stack.call_stack.pop(-1)
+    deliver_to_parent(val, stack)
+
+
+def continue_after_call_result(val: RRE_VALUE, stack: ProgramStack) -> None:
+    if not stack.call_stack:
+        set_program_result(val, stack)
+        return
+
+    top_frame = stack.call_stack[-1]
+    if isinstance(top_frame, ForceFrame):
+        receive_into_force_frame(top_frame, val)
+        return
+
+    handle_value_from_top_of_stack(val, stack)
 
 
 def handle_value_from_return_of_function(val: RRE_VALUE, stack: ProgramStack) -> None:
@@ -99,7 +187,18 @@ def handle_value_from_return_of_function(val: RRE_VALUE, stack: ProgramStack) ->
         )
 
     stack.call_stack.pop(-1)
-    handle_value_from_top_of_stack(val, stack)
+    continue_after_call_result(val, stack)
+
+
+def complete_force_frame(val: RRE_VALUE, stack: ProgramStack) -> None:
+    top_frame = stack.call_stack[-1]
+    if not isinstance(top_frame, ForceFrame):
+        raise RuntimeErrorException(
+            "complete_force_frame assumed to come from ForceFrame"
+        )
+
+    stack.call_stack.pop(-1)
+    continue_after_call_result(val, stack)
 
 
 def schedule_forced_thunk(thunk: RRE_THUNK, stack: ProgramStack) -> None:
@@ -109,14 +208,12 @@ def schedule_forced_thunk(thunk: RRE_THUNK, stack: ProgramStack) -> None:
             "schedule_forced_thunk assumed to come from ExpressionStackFrame"
         )
 
-    arg_count = len(thunk.arguments)
-    if thunk.funcname in PRIMITIVE_OPS:
-        if arg_count != EXPECTED_AMOUNT_OF_ARGS_IN_PRIMITIVE:
-            handle_value_from_top_of_stack(
-                RRE_ERROR("wrong number of arguments"), stack
-            )
-            return
+    arity_error = thunk_arity_error(thunk, stack)
+    if arity_error is not None:
+        handle_value_from_top_of_stack(arity_error, stack)
+        return
 
+    if thunk.funcname in PRIMITIVE_OPS:
         stack.call_stack.pop(-1)
         stack.call_stack.append(
             ExpressionStackFrame(
@@ -127,12 +224,8 @@ def schedule_forced_thunk(thunk: RRE_THUNK, stack: ProgramStack) -> None:
             )
         )
         return
-    
-    func = stack.program.functions[thunk.funcname]
-    if arg_count != len(func.param_names):
-        handle_value_from_top_of_stack(RRE_ERROR("wrong number of arguments"), stack)
-        return
 
+    func = stack.program.functions[thunk.funcname]
     stack.call_stack.append(
         construct_function_call_frame(
             call=Call(thunk.funcname, ()),
@@ -179,6 +272,11 @@ def handle_func_call(
         raise RuntimeErrorException(
             "more than expected amount of args in handle_func_call"
         )
+
+    if call.funcname == "?" and len(evaluated_args) == 1:
+        if is_truthy(evaluated_args[0]):
+            handle_value_from_top_of_stack(evaluated_args[0], stack)
+            return
 
     stack.call_stack.append(
         ExpressionStackFrame(
@@ -275,7 +373,16 @@ def process_function_frame(frame: FunctionStackFrame, stack: ProgramStack) -> No
     function = stack.program.functions[frame.funcname]
 
     if frame.current_line == len(function.lines):
-        handle_value_from_return_of_function(frame.bindings[RETURN_BINDING], stack)
+        val = frame.bindings[RETURN_BINDING]
+        if FUNC_MODS.NON_EAGER in function.modifiers:
+            handle_value_from_return_of_function(val, stack)
+            return
+
+        stack.call_stack.pop(-1)
+        if value_contains_thunk(val):
+            stack.call_stack.append(ForceFrame(val))
+        else:
+            continue_after_call_result(val, stack)
         return
 
     if frame.current_line > len(function.lines):
@@ -289,6 +396,35 @@ def process_function_frame(frame: FunctionStackFrame, stack: ProgramStack) -> No
             ImmutableMappingViewWithIdx(frame.bindings),
         )
     )
+
+
+def process_force_frame(frame: ForceFrame, stack: ProgramStack) -> None:
+    val = frame.value
+
+    if isinstance(val, (RRE_INT, RRE_ERROR)):
+        complete_force_frame(val, stack)
+        return
+
+    if isinstance(val, RRE_THUNK):
+        arity_error = thunk_arity_error(val, stack)
+        if arity_error is not None:
+            complete_force_frame(arity_error, stack)
+            return
+        push_thunk_evaluation(val, stack)
+        return
+
+    if not isinstance(val, RRE_LIST):
+        raise RuntimeErrorException("unknown value in process_force_frame")
+
+    items = val.value
+    while len(frame.forced_items) < len(items):
+        item = items[len(frame.forced_items)]
+        if value_contains_thunk(item):
+            stack.call_stack.append(ForceFrame(item))
+            return
+        frame.forced_items.append(item)
+
+    complete_force_frame(RRE_LIST(tuple(frame.forced_items)), stack)
 
 
 def execute_step(stack: ProgramStack) -> ProgramStack:
@@ -306,6 +442,8 @@ def execute_step(stack: ProgramStack) -> ProgramStack:
         process_function_frame(top_frame, stack)
     elif isinstance(top_frame, ExpressionStackFrame):
         process_expression_frame(top_frame, stack)
+    elif isinstance(top_frame, ForceFrame):
+        process_force_frame(top_frame, stack)
     else:
         raise RuntimeErrorException("Unkown type of a frame in call stack")
 

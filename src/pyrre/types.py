@@ -498,10 +498,19 @@ class FunctionStackFrame:
 
 
 @dataclass
+class ForceFrame:
+    value: RRE_VALUE
+    forced_items: list[RRE_VALUE] = field(default_factory=list)
+
+
+CallStackFrame: TypeAlias = FunctionStackFrame | ExpressionStackFrame | ForceFrame
+
+
+@dataclass
 class ProgramStack:
     program: Program
     program_inputs: list[RRE_VALUE]
-    call_stack: list[FunctionStackFrame | ExpressionStackFrame] = field(
+    call_stack: list[CallStackFrame] = field(
         default_factory=list
     )
     final_value: None | RRE_VALUE = None

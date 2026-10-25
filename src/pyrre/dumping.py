@@ -5,6 +5,7 @@ from pyrre.types import (
     ProgramStack,
     FunctionStackFrame,
     ExpressionStackFrame,
+    ForceFrame,
     Program,
     FunctionDef,
     funcname,
@@ -51,6 +52,18 @@ def dump_expression_frame(frame: ExpressionStackFrame) -> list[str]:
     return lines
 
 
+def dump_force_frame(frame: ForceFrame) -> list[str]:
+    lines: list[str] = []
+
+    lines.append(f"###### FRAME FORCE {dumps_obj_json_with_dataclass(frame.value)}")
+    lines.append(
+        f"###### FRAME FORCED ITEMS {dumps_obj_json_with_dataclass(frame.forced_items)}"
+    )
+    lines.append("")
+
+    return lines
+
+
 def dump_stack(stack: ProgramStack, stack_idx: int) -> list[str]:
     lines: list[str] = []
 
@@ -72,6 +85,8 @@ def dump_stack(stack: ProgramStack, stack_idx: int) -> list[str]:
             lines.extend(dump_func_frame(frame))
         elif isinstance(frame, ExpressionStackFrame):
             lines.extend(dump_expression_frame(frame))
+        elif isinstance(frame, ForceFrame):
+            lines.extend(dump_force_frame(frame))
 
     lines.append("### END OF STACK")
     lines.extend([""] * 3)

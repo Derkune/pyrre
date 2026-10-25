@@ -467,3 +467,141 @@ def test_lazy_function_stores_evaluated_args_as_thunk() -> None:
     endfunc
     """
     assert run_program(code) == RRE_INT(3)
+
+
+def test_recursive_choice_terminates() -> None:
+    code = """
+    func main(num)
+      lz = >(0, num)
+      return ?(lz, main(-(num, 1)))
+    endfunc
+    """
+    assert run_program(code, inputs=[RRE_INT(0)]) == RRE_INT(1)
+    assert run_program(code, inputs=[RRE_INT(3)]) == RRE_INT(1)
+
+
+def test_choice_truthy_does_not_evaluate_second_arg_expressions() -> None:
+    code = """
+    func main()
+        return ?(1, +(bomb(), 1))
+    endfunc
+
+    func bomb()
+        return bomb()
+    endfunc
+    """
+    assert run_program(code) == RRE_INT(1)
+
+
+def test_choice_error_does_not_enter_second_arg() -> None:
+    code = """
+    func main()
+        bad = -(0, [])
+        return ?(bad, bomb())
+    endfunc
+
+    func bomb()
+        return bomb()
+    endfunc
+    """
+    result = run_program(code)
+    assert isinstance(result, RRE_ERROR)
+    assert result.msg == "val1 is out of bounds"
+
+
+def test_eager_function_forces_lazy_return() -> None:
+    code = """
+    func id(x)
+        return x
+    endfunc
+
+    func lazy(a)%
+        return +(a, 2)
+    endfunc
+
+    func main()
+        return id(lazy(1))
+    endfunc
+    """
+    assert run_program(code) == RRE_INT(3)
+
+
+def test_eager_return_forces_nested_percent_thunks() -> None:
+    code = """
+    func main()
+        return ?(0, lazy(1))
+    endfunc
+
+    func lazy(a)%
+        return also(a)
+    endfunc
+
+    func also(b)%
+        return +(b, 1)
+    endfunc
+    """
+    assert run_program(code) == RRE_INT(2)
+
+
+def test_eager_return_forces_thunk_inside_list() -> None:
+    code = """
+    func main()
+        return +([], lazy(1))
+    endfunc
+
+    func lazy(a)%
+        return +(a, 2)
+    endfunc
+    """
+    assert run_program(code) == RRE_LIST((RRE_INT(3),))
+
+
+def test_eager_return_list_force_infects_on_thunk_error() -> None:
+    code = """
+    func boxer(n)
+        return +(+(5, []), lazy(n))
+    endfunc
+
+    func lazy(n)%
+        return -(0, [])
+    endfunc
+
+    func main()
+        return -(1, boxer(1))
+    endfunc
+    """
+    result = run_program(code)
+    assert isinstance(result, RRE_ERROR)
+    assert result.msg == "val1 is out of bounds"
+
+
+def test_eager_return_wrong_arity_thunk_is_error() -> None:
+    code = """
+    func main()
+        return +(1, lazy(2))
+    endfunc
+
+    func lazy(a)%
+        return a
+    endfunc
+    """
+    result = run_program(code)
+    assert isinstance(result, RRE_ERROR)
+    assert result.msg == "wrong number of arguments"
+
+
+def test_percent_return_does_not_force_nested_thunk() -> None:
+    code = """
+    func main()
+        return -(0, ?(0, wrap(1)))
+    endfunc
+
+    func wrap(n)%
+        return inner(n)
+    endfunc
+
+    func inner(n)%
+        return +(n, 1)
+    endfunc
+    """
+    assert run_program(code) == RRE_INT(1)
