@@ -3,6 +3,7 @@ from typing import Any
 from pyrre.types import (
     ProgramStack,
     RRE_INT,
+    RRE_LIST,
 )
 from pyrre.lexer import lex
 from pyrre.parser import parse
@@ -111,3 +112,48 @@ def test_triangular_number_choice(n: int, expected: int) -> None:
         to_dump_history=False,
     )
     assert result == RRE_INT(expected)
+
+
+REVERSE: str = """
+func main(items)
+    return rev(items, [])
+endfunc
+
+func rev(items, acc)
+    empty = >([], items)
+    index = -(1, empty)
+    base = +([], acc)
+    recur = ?(
+        empty, 
+        rev(
+            -(items, 0), 
+            +(-(0, items), acc)
+        )
+    )
+    choices = +(base, recur)
+    return -(index, choices)
+endfunc
+"""
+
+
+def _int_list(values: list[int]) -> RRE_LIST:
+    return RRE_LIST(tuple(RRE_INT(v) for v in values))
+
+
+@pytest.mark.parametrize(
+    "values, expected",
+    [
+        ([], []),
+        ([1], [1]),
+        ([1, 2, 3], [3, 2, 1]),
+        ([4, -2, 0, 7], [7, 0, -2, 4]),
+    ],
+)
+def test_reverse_list(values: list[int], expected: list[int]) -> None:
+    result = run_program(
+        REVERSE,
+        inputs=[_int_list(values)],
+        max_steps=10000,
+        to_dump_history=False,
+    )
+    assert result == _int_list(expected)
