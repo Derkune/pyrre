@@ -374,6 +374,57 @@ def test_error_int_literal_above_max() -> None:
         run_program(code)
 
 
+def test_add_clamps_above_max_int() -> None:
+    code = """
+    func main()
+        return +(127, 1)
+    endfunc
+    """
+    assert run_program(code) == RRE_INT(127)
+
+
+def test_add_in_range_stays_at_max_int() -> None:
+    code = """
+    func main()
+        return +(126, 1)
+    endfunc
+    """
+    assert run_program(code) == RRE_INT(127)
+
+
+def test_add_clamps_below_min_int() -> None:
+    code = """
+    func main()
+        neg_one = -(0, 1)
+        neg_127 = -(0, 127)
+        min_int = -(neg_127, 1)
+        return +(min_int, neg_one)
+    endfunc
+    """
+    assert run_program(code) == RRE_INT(-128)
+
+
+def test_sub_clamps_above_max_int() -> None:
+    code = """
+    func main()
+        neg_127 = -(0, 127)
+        return -(127, neg_127)
+    endfunc
+    """
+    assert run_program(code) == RRE_INT(127)
+
+
+def test_sub_clamps_below_min_int() -> None:
+    code = """
+    func main()
+        neg_127 = -(0, 127)
+        min_int = -(neg_127, 1)
+        return -(min_int, 1)
+    endfunc
+    """
+    assert run_program(code) == RRE_INT(-128)
+
+
 def test_max_length_string_literal_accepted() -> None:
     code = 'func main()\n    return "ABCDEFGHIJKLMNOP"\nendfunc'
     expected = RRE_LIST(tuple(RRE_INT(ord(c)) for c in "ABCDEFGHIJKLMNOP"))

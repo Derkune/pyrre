@@ -16,6 +16,8 @@ from typing import (
 from collections.abc import Mapping
 import copy
 
+from pyrre.static_config import MAX_INT, MIN_INT
+
 
 TK = TypeVar("TK")
 TV = TypeVar("TV")
@@ -219,10 +221,14 @@ class RRE_TypeErrorException(Exception):
         self.msg: str = msg
 
 
+def clamp_int(value: int) -> RRE_INT:
+    return RRE_INT(min(MAX_INT, max(MIN_INT, value)))
+
+
 def RRE_PLUS(val1: RRE_VALUE, val2: RRE_VALUE, _: FunctionMappingView) -> RRE_VALUE:
     match val1, val2:
         case RRE_INT(), RRE_INT():
-            return RRE_INT(val1.value + val2.value)
+            return clamp_int(val1.value + val2.value)
         case RRE_INT(), RRE_LIST():
             return RRE_LIST(tuple([val1]) + val2.value)
         case RRE_INT(), RRE_THUNK():
@@ -366,7 +372,7 @@ def RRE_MINUS(
 ) -> RRE_VALUE:
     match val1, val2:
         case RRE_INT(), RRE_INT():
-            return RRE_INT(val1.value - val2.value)
+            return clamp_int(val1.value - val2.value)
         case RRE_INT(), RRE_LIST():
             lst_idx = try_clamp_lst_idx(val1.value, len(val2.value))
             if lst_idx is None:
@@ -510,9 +516,7 @@ CallStackFrame: TypeAlias = FunctionStackFrame | ExpressionStackFrame | ForceFra
 class ProgramStack:
     program: Program
     program_inputs: list[RRE_VALUE]
-    call_stack: list[CallStackFrame] = field(
-        default_factory=list
-    )
+    call_stack: list[CallStackFrame] = field(default_factory=list)
     final_value: None | RRE_VALUE = None
 
     def copy_stack(self) -> ProgramStack:
