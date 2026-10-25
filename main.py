@@ -15,9 +15,6 @@ if __name__ == "__main__":
         for _ in range(1000):
             with open("dump.txt", "w") as _f:
                 _f.write(dump_history(history, parsed))
-            
-            if _ == 5:
-                pass
 
             stack = execute_step(stack)
             history.append(stack)

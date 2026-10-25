@@ -38,17 +38,15 @@ def wrap_with_runtime_exception(func):
 
 @wrap_with_runtime_exception
 def call_should_be_thunk(
-    *, caller_func: funcname, caller_arg_idx: int, stack: ProgramStack
+    *, call_func: funcname, caller_arg_idx: int, stack: ProgramStack
 ) -> bool:
-    if caller_func in PRIMITIVE_OPS:
-        if caller_func == "?" and caller_arg_idx == 1:
+    if call_func in PRIMITIVE_OPS:
+        if call_func == "?" and caller_arg_idx == 1:
             return True
         return False
 
-    function = stack.program.functions[caller_func]
+    function = stack.program.functions[call_func]
     if FUNC_MODS.NON_EAGER in function.modifiers:
-        if caller_func.lower() == "main" and len(stack.call_stack) == 1:
-            raise RuntimeErrorException("entry cannot output lazily1")
         return True
 
     return False
@@ -91,6 +89,9 @@ def construct_function_call_frame(
 @wrap_with_runtime_exception
 def handle_value_from_top_of_stack(val: RRE_VALUE, stack: ProgramStack) -> None:
     if not stack.call_stack:
+        if isinstance(val, RRE_THUNK):
+            raise RuntimeErrorException("Thunk not allowed as a program return")
+
         stack.final_value = val
         return
 
@@ -212,7 +213,7 @@ def process_expression_frame(frame: ExpressionStackFrame, stack: ProgramStack) -
         handle_value_from_top_of_stack(cast(RRE_VALUE, frame.expr), stack)
     elif isinstance(frame.expr, Call):
         if call_should_be_thunk(
-            caller_func=frame.caller_func,
+            call_func=frame.expr.funcname,
             caller_arg_idx=len(frame.evaluated_args),
             stack=stack,
         ):
