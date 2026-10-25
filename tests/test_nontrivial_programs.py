@@ -77,3 +77,37 @@ def test_triangular_number(n: int, expected: int) -> None:
         to_dump_history=False,
     )
     assert result == RRE_INT(expected)
+
+
+TRIANGULAR_CHOICE: str = """
+func main(n)
+    raw = tri(n)
+    return -(raw, 1)
+endfunc
+
+func tri(n)
+    done = >(0, n)
+    smaller = -(n, 1)
+    rest = ?(done, tri(smaller))
+    return +(n, rest)
+endfunc
+"""
+
+
+@pytest.mark.parametrize(
+    "n, expected",
+    [
+        (0, 0),
+        (1, 1),
+        (5, 15),
+        (10, 55),
+    ],
+)
+def test_triangular_number_choice(n: int, expected: int) -> None:
+    result = run_program(
+        TRIANGULAR_CHOICE,
+        inputs=[RRE_INT(n)],
+        max_steps=10000,
+        to_dump_history=False,
+    )
+    assert result == RRE_INT(expected)
