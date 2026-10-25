@@ -9,6 +9,7 @@ from pyrre.lexer import lex
 from pyrre.parser import parse
 from pyrre.runtime import execute_step
 from pyrre.dumping import dump_history
+from rre_testutil import apply_memoize_modifier
 
 import pytest
 
@@ -19,7 +20,10 @@ def run_program(
     inputs: None | list[Any] = None,
     max_steps: int = 1000,
     to_dump_history: bool = False,
+    memoize: bool = False,
 ) -> Any:
+    if memoize:
+        code = apply_memoize_modifier(code)
     if inputs is None:
         inputs = []
     lexed = lex(code)
@@ -62,6 +66,7 @@ endfunc
 """
 
 
+@pytest.mark.parametrize("memoize", [False, True])
 @pytest.mark.parametrize(
     "n, expected",
     [
@@ -70,12 +75,13 @@ endfunc
         (10, 55),
     ],
 )
-def test_triangular_number(n: int, expected: int) -> None:
+def test_triangular_number(n: int, expected: int, memoize: bool) -> None:
     result = run_program(
         TRIANGULAR,
         inputs=[RRE_INT(n)],
         max_steps=10000,
         to_dump_history=False,
+        memoize=memoize,
     )
     assert result == RRE_INT(expected)
 
@@ -95,6 +101,7 @@ endfunc
 """
 
 
+@pytest.mark.parametrize("memoize", [False, True])
 @pytest.mark.parametrize(
     "n, expected",
     [
@@ -104,12 +111,13 @@ endfunc
         (10, 55),
     ],
 )
-def test_triangular_number_choice(n: int, expected: int) -> None:
+def test_triangular_number_choice(n: int, expected: int, memoize: bool) -> None:
     result = run_program(
         TRIANGULAR_CHOICE,
         inputs=[RRE_INT(n)],
         max_steps=10000,
         to_dump_history=False,
+        memoize=memoize,
     )
     assert result == RRE_INT(expected)
 
@@ -140,6 +148,7 @@ def _int_list(values: list[int]) -> RRE_LIST:
     return RRE_LIST.create(tuple(RRE_INT(v) for v in values))
 
 
+@pytest.mark.parametrize("memoize", [False, True])
 @pytest.mark.parametrize(
     "values, expected",
     [
@@ -149,12 +158,13 @@ def _int_list(values: list[int]) -> RRE_LIST:
         ([4, -2, 0, 7], [7, 0, -2, 4]),
     ],
 )
-def test_reverse_list(values: list[int], expected: list[int]) -> None:
+def test_reverse_list(values: list[int], expected: list[int], memoize: bool) -> None:
     result = run_program(
         REVERSE,
         inputs=[_int_list(values)],
         max_steps=10000,
         to_dump_history=False,
+        memoize=memoize,
     )
     assert result == _int_list(expected)
 
@@ -178,6 +188,7 @@ endfunc
 """
 
 
+@pytest.mark.parametrize("memoize", [False, True])
 @pytest.mark.parametrize(
     "a, b, expected",
     [
@@ -196,12 +207,13 @@ endfunc
         (-1, -1, 1),
     ],
 )
-def test_multiply(a: int, b: int, expected: int) -> None:
+def test_multiply(a: int, b: int, expected: int, memoize: bool) -> None:
     result = run_program(
         MULTIPLY,
         inputs=[RRE_INT(a), RRE_INT(b)],
         max_steps=10000,
         to_dump_history=False,
+        memoize=memoize,
     )
     assert result == RRE_INT(expected)
 
@@ -238,6 +250,7 @@ endfunc
 """
 
 
+@pytest.mark.parametrize("memoize", [False, True])
 @pytest.mark.parametrize(
     "values, expected",
     [
@@ -249,12 +262,13 @@ endfunc
         ([ord(c) for c in "PyRRE!"], [ord(c) for c in "PYRRE!"]),
     ],
 )
-def test_caps(values: list[int], expected: list[int]) -> None:
+def test_caps(values: list[int], expected: list[int], memoize: bool) -> None:
     result = run_program(
         CAPS,
         inputs=[_int_list(values)],
         max_steps=10000,
         to_dump_history=False,
+        memoize=memoize,
     )
     assert result == _int_list(expected)
 
@@ -354,6 +368,7 @@ def _modulate_expected(pairs: list[tuple[int, int]]) -> RRE_LIST:
     return RRE_LIST.create(tuple(items))
 
 
+@pytest.mark.parametrize("memoize", [False, True])
 @pytest.mark.parametrize(
     "mods, data",
     [
@@ -369,11 +384,12 @@ def _modulate_expected(pairs: list[tuple[int, int]]) -> RRE_LIST:
         ([1, 5, 0, 6], [-1, 0, 8, 3]),
     ],
 )
-def test_modulate(mods: list[int], data: list[int]) -> None:
+def test_modulate(mods: list[int], data: list[int], memoize: bool) -> None:
     result = run_program(
         MODULATE,
         inputs=[_int_list(mods), _int_list(data)],
         max_steps=10000,
         to_dump_history=False,
+        memoize=memoize,
     )
     assert result == _modulate_expected(list(zip(mods, data)))

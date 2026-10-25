@@ -17,6 +17,7 @@ from pyrre.lexer import lex
 from pyrre.parser import parse
 from pyrre.runtime import execute_step
 from pyrre.dumping import dump_history
+from rre_testutil import apply_memoize_modifier
 
 import pytest
 
@@ -27,7 +28,10 @@ def run_program(
     inputs: None | list[Any] = None,
     max_steps: int = 1000,
     to_dump_history: bool = False,
+    memoize: bool = False,
 ) -> Any:
+    if memoize:
+        code = apply_memoize_modifier(code)
     if inputs is None:
         inputs = []
     lexed = lex(code)
@@ -70,12 +74,14 @@ endfunc
 """
 
 
-def test_integration_1() -> None:
-    result = run_program(CASE_1)
+@pytest.mark.parametrize("memoize", [False, True])
+def test_integration_1(memoize: bool) -> None:
+    result = run_program(CASE_1, memoize=memoize)
     assert result == RRE_LIST.create((RRE_INT(3), RRE_INT(65), RRE_INT(0)))
 
 
-def test_int_arithmetic_basic() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_int_arithmetic_basic(memoize: bool) -> None:
     code = """
     func main()
         sum = +(40, 2)
@@ -83,48 +89,53 @@ def test_int_arithmetic_basic() -> None:
         return +(sum, diff)
     endfunc
     """
-    assert run_program(code) == RRE_INT(37)
+    assert run_program(code, memoize=memoize) == RRE_INT(37)
 
 
-def test_int_nested_calls() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_int_nested_calls(memoize: bool) -> None:
     code = """
     func main()
         return -(+(10, +(20, 30)), 15)
     endfunc
     """
-    assert run_program(code) == RRE_INT(45)
+    assert run_program(code, memoize=memoize) == RRE_INT(45)
 
 
-def test_add_int_to_list_prepend() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_add_int_to_list_prepend(memoize: bool) -> None:
     code = """
     func main()
         list1 = +(65, [])
         return +(66, list1)
     endfunc
     """
-    assert run_program(code) == RRE_LIST.create((RRE_INT(66), RRE_INT(65)))
+    assert run_program(code, memoize=memoize) == RRE_LIST.create((RRE_INT(66), RRE_INT(65)))
 
 
-def test_add_list_to_int_append() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_add_list_to_int_append(memoize: bool) -> None:
     code = """
     func main()
         return +("A", 66)
     endfunc
     """
-    assert run_program(code) == RRE_LIST.create((RRE_INT(65), RRE_INT(66)))
+    assert run_program(code, memoize=memoize) == RRE_LIST.create((RRE_INT(65), RRE_INT(66)))
 
 
-def test_add_list_to_list_nesting() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_add_list_to_list_nesting(memoize: bool) -> None:
     code = """
     func main()
         return +("A", "B")
     endfunc
     """
     expected = RRE_LIST.create((RRE_INT(65), RRE_LIST.create((RRE_INT(66),))))
-    assert run_program(code) == expected
+    assert run_program(code, memoize=memoize) == expected
 
 
-def test_sub_int_list_retrieval_and_clamping() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_sub_int_list_retrieval_and_clamping(memoize: bool) -> None:
     code = """
     func main()
         idx0 = -(0, "ABC")
@@ -136,10 +147,11 @@ def test_sub_int_list_retrieval_and_clamping() -> None:
     """
 
     expected = RRE_LIST.create((RRE_INT(65), RRE_INT(67), RRE_INT(65)))
-    assert run_program(code) == expected
+    assert run_program(code, memoize=memoize) == expected
 
 
-def test_sub_list_int_removal_and_clamping() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_sub_list_int_removal_and_clamping(memoize: bool) -> None:
     code = """
     func main()
         mid_removed = -("ABC", 1)
@@ -156,10 +168,11 @@ def test_sub_list_int_removal_and_clamping() -> None:
             RRE_LIST.create((RRE_INT(66), RRE_INT(67))),
         )
     )
-    assert run_program(code) == expected
+    assert run_program(code, memoize=memoize) == expected
 
 
-def test_sub_list_list_difference() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_sub_list_list_difference(memoize: bool) -> None:
     code = """
     func main()
         rem_one = -("ABACA", "A")
@@ -175,10 +188,11 @@ def test_sub_list_list_difference() -> None:
     )
 
     expected = RRE_LIST.create((rem_one, rem_two, rem_none))
-    assert run_program(code) == expected
+    assert run_program(code, memoize=memoize) == expected
 
 
-def test_comparisons_integers() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_comparisons_integers(memoize: bool) -> None:
     code = """
     func main()
         gt = >(5, 3)
@@ -188,10 +202,11 @@ def test_comparisons_integers() -> None:
     endfunc
     """
     expected = RRE_LIST.create((RRE_INT(1), RRE_INT(1), RRE_INT(0)))
-    assert run_program(code) == expected
+    assert run_program(code, memoize=memoize) == expected
 
 
-def test_comparisons_list_and_int() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_comparisons_list_and_int(memoize: bool) -> None:
     code = """
     func main()
         list_gt_int = >([], 100)
@@ -200,10 +215,11 @@ def test_comparisons_list_and_int() -> None:
     endfunc
     """
     expected = RRE_LIST.create((RRE_INT(1), RRE_INT(0)))
-    assert run_program(code) == expected
+    assert run_program(code, memoize=memoize) == expected
 
 
-def test_comparisons_lists() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_comparisons_lists(memoize: bool) -> None:
     code = """
     func main()
         shorter = >("A", "AA")
@@ -217,10 +233,11 @@ def test_comparisons_lists() -> None:
     expected = RRE_LIST.create(
         (RRE_INT(0), RRE_INT(1), RRE_INT(1), RRE_INT(0), RRE_INT(1))
     )
-    assert run_program(code) == expected
+    assert run_program(code, memoize=memoize) == expected
 
 
-def test_function_modifiers_and_distinct_letters() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_function_modifiers_and_distinct_letters(memoize: bool) -> None:
     code = """
     func main()!@#
         res = alpha(10, 20)
@@ -235,17 +252,18 @@ def test_function_modifiers_and_distinct_letters() -> None:
         return -(v, 5)
     endfunc
     """
-    assert run_program(code, to_dump_history=False) == RRE_INT(25)
+    assert run_program(code, to_dump_history=False, memoize=memoize) == RRE_INT(25)
 
 
-def test_main_with_arguments() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_main_with_arguments(memoize: bool) -> None:
     code = """
     func main(x, y)
         return +(x, y)
     endfunc
     """
     inputs = [RRE_INT(12), RRE_INT(18)]
-    assert run_program(code, inputs=inputs) == RRE_INT(30)
+    assert run_program(code, inputs=inputs, memoize=memoize) == RRE_INT(30)
 
 
 def test_error_function_names_starting_with_same_letter() -> None:
@@ -360,13 +378,14 @@ def test_error_invalid_string_character() -> None:
         run_program(code)
 
 
-def test_max_int_literal_accepted() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_max_int_literal_accepted(memoize: bool) -> None:
     code = """
     func main()
         return 127
     endfunc
     """
-    assert run_program(code) == RRE_INT(127)
+    assert run_program(code, memoize=memoize) == RRE_INT(127)
 
 
 def test_error_int_literal_above_max() -> None:
@@ -379,25 +398,28 @@ def test_error_int_literal_above_max() -> None:
         run_program(code)
 
 
-def test_add_clamps_above_max_int() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_add_clamps_above_max_int(memoize: bool) -> None:
     code = """
     func main()
         return +(127, 1)
     endfunc
     """
-    assert run_program(code) == RRE_INT(127)
+    assert run_program(code, memoize=memoize) == RRE_INT(127)
 
 
-def test_add_in_range_stays_at_max_int() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_add_in_range_stays_at_max_int(memoize: bool) -> None:
     code = """
     func main()
         return +(126, 1)
     endfunc
     """
-    assert run_program(code) == RRE_INT(127)
+    assert run_program(code, memoize=memoize) == RRE_INT(127)
 
 
-def test_add_clamps_below_min_int() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_add_clamps_below_min_int(memoize: bool) -> None:
     code = """
     func main()
         neg_one = -(0, 1)
@@ -406,20 +428,22 @@ def test_add_clamps_below_min_int() -> None:
         return +(min_int, neg_one)
     endfunc
     """
-    assert run_program(code) == RRE_INT(-128)
+    assert run_program(code, memoize=memoize) == RRE_INT(-128)
 
 
-def test_sub_clamps_above_max_int() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_sub_clamps_above_max_int(memoize: bool) -> None:
     code = """
     func main()
         neg_127 = -(0, 127)
         return -(127, neg_127)
     endfunc
     """
-    assert run_program(code) == RRE_INT(127)
+    assert run_program(code, memoize=memoize) == RRE_INT(127)
 
 
-def test_sub_clamps_below_min_int() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_sub_clamps_below_min_int(memoize: bool) -> None:
     code = """
     func main()
         neg_127 = -(0, 127)
@@ -427,13 +451,14 @@ def test_sub_clamps_below_min_int() -> None:
         return -(min_int, 1)
     endfunc
     """
-    assert run_program(code) == RRE_INT(-128)
+    assert run_program(code, memoize=memoize) == RRE_INT(-128)
 
 
-def test_max_length_string_literal_accepted() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_max_length_string_literal_accepted(memoize: bool) -> None:
     code = 'func main()\n    return "ABCDEFGHIJKLMNOP"\nendfunc'
     expected = RRE_LIST.create(tuple(RRE_INT(ord(c)) for c in "ABCDEFGHIJKLMNOP"))
-    assert run_program(code) == expected
+    assert run_program(code, memoize=memoize) == expected
 
 
 def test_error_string_literal_too_long() -> None:
@@ -442,7 +467,8 @@ def test_error_string_literal_too_long() -> None:
         run_program(code)
 
 
-def test_append_to_max_length_list_is_noop() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_append_to_max_length_list_is_noop(memoize: bool) -> None:
     code = """
     func main()
         full = "ABCDEFGHIJKLMNOP"
@@ -450,10 +476,11 @@ def test_append_to_max_length_list_is_noop() -> None:
     endfunc
     """
     expected = RRE_LIST.create(tuple(RRE_INT(ord(c)) for c in "ABCDEFGHIJKLMNOP"))
-    assert run_program(code) == expected
+    assert run_program(code, memoize=memoize) == expected
 
 
-def test_prepend_to_max_length_list_is_noop() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_prepend_to_max_length_list_is_noop(memoize: bool) -> None:
     code = """
     func main()
         full = "ABCDEFGHIJKLMNOP"
@@ -461,20 +488,22 @@ def test_prepend_to_max_length_list_is_noop() -> None:
     endfunc
     """
     expected = RRE_LIST.create(tuple(RRE_INT(ord(c)) for c in "ABCDEFGHIJKLMNOP"))
-    assert run_program(code) == expected
+    assert run_program(code, memoize=memoize) == expected
 
 
-def test_append_to_near_max_length_list_grows() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_append_to_near_max_length_list_grows(memoize: bool) -> None:
     code = """
     func main()
         return +("ABCDEFGHIJKLMNO", 80)
     endfunc
     """
     expected = RRE_LIST.create(tuple(RRE_INT(ord(c)) for c in "ABCDEFGHIJKLMNOP"))
-    assert run_program(code) == expected
+    assert run_program(code, memoize=memoize) == expected
 
 
-def test_add_list_to_max_length_list_is_noop() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_add_list_to_max_length_list_is_noop(memoize: bool) -> None:
     code = """
     func main()
         full = "ABCDEFGHIJKLMNOP"
@@ -482,10 +511,11 @@ def test_add_list_to_max_length_list_is_noop() -> None:
     endfunc
     """
     expected = RRE_LIST.create(tuple(RRE_INT(ord(c)) for c in "ABCDEFGHIJKLMNOP"))
-    assert run_program(code) == expected
+    assert run_program(code, memoize=memoize) == expected
 
 
-def test_nesting_at_max_depth_then_wrap_is_noop() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_nesting_at_max_depth_then_wrap_is_noop(memoize: bool) -> None:
     code = """
     func main()
         d1 = []
@@ -499,10 +529,11 @@ def test_nesting_at_max_depth_then_wrap_is_noop() -> None:
         return +([], d8)
     endfunc
     """
-    assert run_program(code) == RRE_LIST.create(())
+    assert run_program(code, memoize=memoize) == RRE_LIST.create(())
 
 
-def test_thunk_append_and_prepend_at_max_length_are_noops() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_thunk_append_and_prepend_at_max_length_are_noops(memoize: bool) -> None:
     code = """
     func lazy()%
         return 0
@@ -533,7 +564,7 @@ def test_thunk_append_and_prepend_at_max_length_are_noops() -> None:
         return +(+( [], last_after_append), first_after_prepend)
     endfunc
     """
-    assert run_program(code) == RRE_LIST.create((RRE_INT(1), RRE_INT(1)))
+    assert run_program(code, memoize=memoize) == RRE_LIST.create((RRE_INT(1), RRE_INT(1)))
 
 
 def test_overlong_list_construction_raises() -> None:
@@ -564,7 +595,8 @@ def test_overlong_thunk_construction_raises() -> None:
         RRE_THUNK.create("f", items)
 
 
-def test_max_args_params_and_call_accepted() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_max_args_params_and_call_accepted(memoize: bool) -> None:
     code = """
     func main()
         return other(1, 2, 3)
@@ -574,7 +606,7 @@ def test_max_args_params_and_call_accepted() -> None:
         return +(+(a, b), c)
     endfunc
     """
-    assert run_program(code) == RRE_INT(6)
+    assert run_program(code, memoize=memoize) == RRE_INT(6)
 
 
 def test_error_too_many_function_parameters() -> None:
@@ -625,16 +657,18 @@ def test_error_int_token_below_min() -> None:
         parse(_main_returning_int_tokens("-129"))
 
 
-def test_choice_truthy_returns_first_arg() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_choice_truthy_returns_first_arg(memoize: bool) -> None:
     code = """
     func main()
         return ?(1, +(1, 1))
     endfunc
     """
-    assert run_program(code) == RRE_INT(1)
+    assert run_program(code, memoize=memoize) == RRE_INT(1)
 
 
-def test_choice_truthy_does_not_enter_second_arg() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_choice_truthy_does_not_enter_second_arg(memoize: bool) -> None:
     code = """
     func main()
         return ?(1, rec(1))
@@ -644,19 +678,21 @@ def test_choice_truthy_does_not_enter_second_arg() -> None:
         return rec(n)
     endfunc
     """
-    assert run_program(code) == RRE_INT(1)
+    assert run_program(code, memoize=memoize) == RRE_INT(1)
 
 
-def test_choice_falsy_evaluates_primitive_second_arg() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_choice_falsy_evaluates_primitive_second_arg(memoize: bool) -> None:
     code = """
     func main()
         return ?(0, +(1, 1))
     endfunc
     """
-    assert run_program(code) == RRE_INT(2)
+    assert run_program(code, memoize=memoize) == RRE_INT(2)
 
 
-def test_choice_falsy_evaluates_user_function_second_arg() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_choice_falsy_evaluates_user_function_second_arg(memoize: bool) -> None:
     code = """
     func main()
         return ?(0, addone(1))
@@ -666,10 +702,11 @@ def test_choice_falsy_evaluates_user_function_second_arg() -> None:
         return +(n, 1)
     endfunc
     """
-    assert run_program(code) == RRE_INT(2)
+    assert run_program(code, memoize=memoize) == RRE_INT(2)
 
 
-def test_choice_falsy_returns_non_call_second_arg() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_choice_falsy_returns_non_call_second_arg(memoize: bool) -> None:
     code = """
     func main()
         int_branch = ?(0, 5)
@@ -678,10 +715,11 @@ def test_choice_falsy_returns_non_call_second_arg() -> None:
     endfunc
     """
     expected = RRE_LIST.create((RRE_INT(5), RRE_LIST.create(())))
-    assert run_program(code) == expected
+    assert run_program(code, memoize=memoize) == expected
 
 
-def test_choice_falsy_forces_lazy_function_body() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_choice_falsy_forces_lazy_function_body(memoize: bool) -> None:
     code = """
     func main()
         return ?(0, lazy(1, 2))
@@ -691,10 +729,11 @@ def test_choice_falsy_forces_lazy_function_body() -> None:
         return +(a, b)
     endfunc
     """
-    assert run_program(code) == RRE_INT(3)
+    assert run_program(code, memoize=memoize) == RRE_INT(3)
 
 
-def test_choice_wrong_arity_thunk_is_error() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_choice_wrong_arity_thunk_is_error(memoize: bool) -> None:
     code = """
     func main()
         t = lazy(1, 2)
@@ -706,12 +745,13 @@ def test_choice_wrong_arity_thunk_is_error() -> None:
         return +(a, b)
     endfunc
     """
-    result = run_program(code)
+    result = run_program(code, memoize=memoize)
     assert isinstance(result, RRE_ERROR)
     assert result.msg == "wrong number of arguments"
 
 
-def test_choice_thunk_condition_does_not_enter_second_arg() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_choice_thunk_condition_does_not_enter_second_arg(memoize: bool) -> None:
     code = """
     func main()
         return -(0, ?(lazy(1), rec(1)))
@@ -725,10 +765,11 @@ def test_choice_thunk_condition_does_not_enter_second_arg() -> None:
         return rec(n)
     endfunc
     """
-    assert run_program(code) == RRE_INT(1)
+    assert run_program(code, memoize=memoize) == RRE_INT(1)
 
 
-def test_lazy_function_stores_evaluated_args_as_thunk() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_lazy_function_stores_evaluated_args_as_thunk(memoize: bool) -> None:
     code = """
     func main()
         return -(0, lazy(+(1, 2), 4))
@@ -738,21 +779,23 @@ def test_lazy_function_stores_evaluated_args_as_thunk() -> None:
         return +(a, b)
     endfunc
     """
-    assert run_program(code) == RRE_INT(3)
+    assert run_program(code, memoize=memoize) == RRE_INT(3)
 
 
-def test_recursive_choice_terminates() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_recursive_choice_terminates(memoize: bool) -> None:
     code = """
     func main(num)
       lz = >(0, num)
       return ?(lz, main(-(num, 1)))
     endfunc
     """
-    assert run_program(code, inputs=[RRE_INT(0)]) == RRE_INT(1)
-    assert run_program(code, inputs=[RRE_INT(3)]) == RRE_INT(1)
+    assert run_program(code, inputs=[RRE_INT(0)], memoize=memoize) == RRE_INT(1)
+    assert run_program(code, inputs=[RRE_INT(3)], memoize=memoize) == RRE_INT(1)
 
 
-def test_choice_truthy_does_not_evaluate_second_arg_expressions() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_choice_truthy_does_not_evaluate_second_arg_expressions(memoize: bool) -> None:
     code = """
     func main()
         return ?(1, +(bomb(), 1))
@@ -762,10 +805,11 @@ def test_choice_truthy_does_not_evaluate_second_arg_expressions() -> None:
         return bomb()
     endfunc
     """
-    assert run_program(code) == RRE_INT(1)
+    assert run_program(code, memoize=memoize) == RRE_INT(1)
 
 
-def test_choice_error_does_not_enter_second_arg() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_choice_error_does_not_enter_second_arg(memoize: bool) -> None:
     code = """
     func main()
         bad = ~("choice error")
@@ -776,10 +820,11 @@ def test_choice_error_does_not_enter_second_arg() -> None:
         return bomb()
     endfunc
     """
-    assert run_program(code) == RRE_ERROR("choice error")
+    assert run_program(code, memoize=memoize) == RRE_ERROR("choice error")
 
 
-def test_eager_function_forces_lazy_return() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_eager_function_forces_lazy_return(memoize: bool) -> None:
     code = """
     func id(x)
         return x
@@ -793,10 +838,11 @@ def test_eager_function_forces_lazy_return() -> None:
         return id(lazy(1))
     endfunc
     """
-    assert run_program(code) == RRE_INT(3)
+    assert run_program(code, memoize=memoize) == RRE_INT(3)
 
 
-def test_eager_return_forces_nested_percent_thunks() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_eager_return_forces_nested_percent_thunks(memoize: bool) -> None:
     code = """
     func main()
         return ?(0, lazy(1))
@@ -810,10 +856,11 @@ def test_eager_return_forces_nested_percent_thunks() -> None:
         return +(b, 1)
     endfunc
     """
-    assert run_program(code) == RRE_INT(2)
+    assert run_program(code, memoize=memoize) == RRE_INT(2)
 
 
-def test_eager_return_forces_thunk_inside_list() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_eager_return_forces_thunk_inside_list(memoize: bool) -> None:
     code = """
     func main()
         return +([], lazy(1))
@@ -823,10 +870,11 @@ def test_eager_return_forces_thunk_inside_list() -> None:
         return +(a, 2)
     endfunc
     """
-    assert run_program(code) == RRE_LIST.create((RRE_INT(3),))
+    assert run_program(code, memoize=memoize) == RRE_LIST.create((RRE_INT(3),))
 
 
-def test_eager_return_list_force_infects_on_thunk_error() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_eager_return_list_force_infects_on_thunk_error(memoize: bool) -> None:
     code = """
     func boxer(n)
         return +(+(5, []), lazy(n))
@@ -840,10 +888,11 @@ def test_eager_return_list_force_infects_on_thunk_error() -> None:
         return -(1, boxer(1))
     endfunc
     """
-    assert run_program(code) == RRE_ERROR("thunk error")
+    assert run_program(code, memoize=memoize) == RRE_ERROR("thunk error")
 
 
-def test_eager_return_wrong_arity_thunk_is_error() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_eager_return_wrong_arity_thunk_is_error(memoize: bool) -> None:
     code = """
     func main()
         return +(1, lazy(2))
@@ -853,12 +902,13 @@ def test_eager_return_wrong_arity_thunk_is_error() -> None:
         return a
     endfunc
     """
-    result = run_program(code)
+    result = run_program(code, memoize=memoize)
     assert isinstance(result, RRE_ERROR)
     assert result.msg == "wrong number of arguments"
 
 
-def test_percent_return_does_not_force_nested_thunk() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_percent_return_does_not_force_nested_thunk(memoize: bool) -> None:
     code = """
     func main()
         return -(0, ?(0, wrap(1)))
@@ -872,43 +922,47 @@ def test_percent_return_does_not_force_nested_thunk() -> None:
         return +(n, 1)
     endfunc
     """
-    assert run_program(code) == RRE_INT(1)
+    assert run_program(code, memoize=memoize) == RRE_INT(1)
 
 
-def test_error_constant_returns_message() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_error_constant_returns_message(memoize: bool) -> None:
     code = """
     func main()
         return ~("Error message")
     endfunc
     """
-    assert run_program(code) == RRE_ERROR("Error message")
+    assert run_program(code, memoize=memoize) == RRE_ERROR("Error message")
 
 
-def test_error_constant_infects_plus() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_error_constant_infects_plus(memoize: bool) -> None:
     code = """
     func main()
         return +(~("a"), 1)
     endfunc
     """
-    assert run_program(code) == RRE_ERROR("a")
+    assert run_program(code, memoize=memoize) == RRE_ERROR("a")
 
 
-def test_error_constant_combines_two_errors() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_error_constant_combines_two_errors(memoize: bool) -> None:
     code = """
     func main()
         return +(~("a"), ~("b"))
     endfunc
     """
-    assert run_program(code) == RRE_ERROR("a+b")
+    assert run_program(code, memoize=memoize) == RRE_ERROR("a+b")
 
 
-def test_error_constant_empty_message() -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_error_constant_empty_message(memoize: bool) -> None:
     code = """
     func main()
         return ~("")
     endfunc
     """
-    assert run_program(code) == RRE_ERROR("")
+    assert run_program(code, memoize=memoize) == RRE_ERROR("")
 
 
 @pytest.mark.parametrize(
@@ -932,7 +986,8 @@ def test_error_constant_rejects_non_string_argument(bad: str) -> None:
         run_program(code)
 
 
-def test_recursion_depth_at_limit_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_recursion_depth_at_limit_succeeds(monkeypatch: pytest.MonkeyPatch, memoize: bool) -> None:
     monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 2)
     code = """
     func main()
@@ -943,10 +998,11 @@ def test_recursion_depth_at_limit_succeeds(monkeypatch: pytest.MonkeyPatch) -> N
         return 7
     endfunc
     """
-    assert run_program(code) == RRE_INT(7)
+    assert run_program(code, memoize=memoize) == RRE_INT(7)
 
 
-def test_recursion_depth_exceeded_is_error(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_recursion_depth_exceeded_is_error(monkeypatch: pytest.MonkeyPatch, memoize: bool) -> None:
     monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 2)
     code = """
     func main()
@@ -957,10 +1013,11 @@ def test_recursion_depth_exceeded_is_error(monkeypatch: pytest.MonkeyPatch) -> N
         return rec()
     endfunc
     """
-    assert run_program(code) == RRE_ERROR("recursion depth")
+    assert run_program(code, memoize=memoize) == RRE_ERROR("recursion depth")
 
 
-def test_recursion_depth_error_infects_plus(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_recursion_depth_error_infects_plus(monkeypatch: pytest.MonkeyPatch, memoize: bool) -> None:
     monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 2)
     code = """
     func main()
@@ -971,10 +1028,11 @@ def test_recursion_depth_error_infects_plus(monkeypatch: pytest.MonkeyPatch) -> 
         return rec()
     endfunc
     """
-    assert run_program(code) == RRE_ERROR("recursion depth")
+    assert run_program(code, memoize=memoize) == RRE_ERROR("recursion depth")
 
 
-def test_bindings_do_not_count_as_recursion(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("memoize", [False, True])
+def test_bindings_do_not_count_as_recursion(monkeypatch: pytest.MonkeyPatch, memoize: bool) -> None:
     monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 1)
     code = """
     func main()
@@ -986,11 +1044,12 @@ def test_bindings_do_not_count_as_recursion(monkeypatch: pytest.MonkeyPatch) -> 
         return e
     endfunc
     """
-    assert run_program(code) == RRE_INT(5)
+    assert run_program(code, memoize=memoize) == RRE_INT(5)
 
 
+@pytest.mark.parametrize("memoize", [False, True])
 def test_expression_and_force_frames_do_not_count_as_recursion(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, memoize: bool
 ) -> None:
     monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 1)
     code = """
@@ -999,11 +1058,12 @@ def test_expression_and_force_frames_do_not_count_as_recursion(
         return boxed
     endfunc
     """
-    assert run_program(code) == RRE_LIST.create((RRE_INT(3),))
+    assert run_program(code, memoize=memoize) == RRE_LIST.create((RRE_INT(3),))
 
 
+@pytest.mark.parametrize("memoize", [False, True])
 def test_eager_percent_callee_counts_function_frames(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, memoize: bool
 ) -> None:
     monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 1)
     code = """
@@ -1015,14 +1075,15 @@ def test_eager_percent_callee_counts_function_frames(
         return +(0, ?(0, lazy(1)))
     endfunc
     """
-    assert run_program(code) == RRE_ERROR("recursion depth")
+    assert run_program(code, memoize=memoize) == RRE_ERROR("recursion depth")
 
     monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 2)
-    assert run_program(code) == RRE_INT(2)
+    assert run_program(code, memoize=memoize) == RRE_INT(2)
 
 
+@pytest.mark.parametrize("memoize", [False, True])
 def test_percent_thunk_not_counted_until_forced(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, memoize: bool
 ) -> None:
     monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 1)
     code = """
@@ -1035,11 +1096,12 @@ def test_percent_thunk_not_counted_until_forced(
         return 5
     endfunc
     """
-    assert run_program(code) == RRE_INT(5)
+    assert run_program(code, memoize=memoize) == RRE_INT(5)
 
 
+@pytest.mark.parametrize("memoize", [False, True])
 def test_truthy_choice_skips_recursive_call_at_limit(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, memoize: bool
 ) -> None:
     monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 2)
     code = """
@@ -1055,11 +1117,12 @@ def test_truthy_choice_skips_recursive_call_at_limit(
         return leaf()
     endfunc
     """
-    assert run_program(code) == RRE_INT(1)
+    assert run_program(code, memoize=memoize) == RRE_INT(1)
 
 
+@pytest.mark.parametrize("memoize", [False, True])
 def test_choice_force_of_percent_thunk_counts_function_frame(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, memoize: bool
 ) -> None:
     monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 1)
     code = """
@@ -1071,4 +1134,4 @@ def test_choice_force_of_percent_thunk_counts_function_frame(
         return ?(0, rec())
     endfunc
     """
-    assert run_program(code) == RRE_ERROR("recursion depth")
+    assert run_program(code, memoize=memoize) == RRE_ERROR("recursion depth")

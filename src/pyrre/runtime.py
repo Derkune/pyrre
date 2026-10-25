@@ -28,10 +28,29 @@ from pyrre.types import (
     FUNC_MODS,
     is_truthy,
     Program,
+    MemoKey,
 )
 from pyrre.static_config import MAX_RECURSION_DEPTH
 
 RECURSION_DEPTH_ERROR = RRE_ERROR("recursion depth")
+
+
+def memo_key_for(name: funcname, args: Iterable[RRE_VALUE]) -> MemoKey:
+    return (name, tuple(args))
+
+
+def lookup_memo(func: FunctionDef, key: MemoKey, stack: ProgramStack) -> RRE_VALUE | None:
+    if FUNC_MODS.MEMOIZE not in func.modifiers:
+        return None
+    return stack.memo.get(key)
+
+
+def store_memo(key: MemoKey | None, val: RRE_VALUE, stack: ProgramStack) -> None:
+    if key is None:
+        return
+    if isinstance(val, RRE_ERROR) and RECURSION_DEPTH_ERROR.msg in val.msg:
+        return
+    stack.memo[key] = val
 
 
 def callee_returns_thunk(*, call_func: funcname, stack: ProgramStack) -> bool:
@@ -64,7 +83,10 @@ def construct_point_of_entry_frame(stack: ProgramStack) -> FunctionStackFrame:
     ):
         bindings[param] = passed_val
 
-    return FunctionStackFrame(main_name, bindings)
+    memo_key = None
+    if FUNC_MODS.MEMOIZE in main_func.modifiers:
+        memo_key = memo_key_for(main_name, stack.program_inputs)
+    return FunctionStackFrame(main_name, bindings, memo_key=memo_key)
 
 
 def construct_function_call_frame(
@@ -74,7 +96,10 @@ def construct_function_call_frame(
     for val, name in zip(evaluated_args, func.param_names, strict=True):
         arg_vals[name] = val
 
-    return FunctionStackFrame(call.funcname, arg_vals)
+    memo_key = None
+    if FUNC_MODS.MEMOIZE in func.modifiers:
+        memo_key = memo_key_for(call.funcname, evaluated_args)
+    return FunctionStackFrame(call.funcname, arg_vals, memo_key=memo_key)
 
 
 def function_frame_count(stack: ProgramStack) -> int:
@@ -124,6 +149,12 @@ def push_thunk_evaluation(thunk: RRE_THUNK, stack: ProgramStack) -> None:
         return
 
     func = stack.program.functions[thunk.funcname]
+    cached = lookup_memo(
+        func, memo_key_for(thunk.funcname, thunk.arguments), stack
+    )
+    if cached is not None:
+        complete_force_frame(cached, stack)
+        return
     frame = construct_function_call_frame(
         call=Call(thunk.funcname, ()),
         evaluated_args=list(thunk.arguments),
@@ -202,6 +233,7 @@ def handle_value_from_return_of_function(val: RRE_VALUE, stack: ProgramStack) ->
             "handle_value_from_return_of_function assumed to come from FunctionStackFrame"
         )
 
+    store_memo(top_frame.memo_key, val, stack)
     stack.call_stack.pop(-1)
     continue_after_call_result(val, stack)
 
@@ -213,6 +245,7 @@ def complete_force_frame(val: RRE_VALUE, stack: ProgramStack) -> None:
             "complete_force_frame assumed to come from ForceFrame"
         )
 
+    store_memo(top_frame.memo_key, val, stack)
     stack.call_stack.pop(-1)
     continue_after_call_result(val, stack)
 
@@ -242,6 +275,12 @@ def schedule_forced_thunk(thunk: RRE_THUNK, stack: ProgramStack) -> None:
         return
 
     func = stack.program.functions[thunk.funcname]
+    cached = lookup_memo(
+        func, memo_key_for(thunk.funcname, thunk.arguments), stack
+    )
+    if cached is not None:
+        handle_value_from_top_of_stack(cached, stack)
+        return
     frame = construct_function_call_frame(
         call=Call(thunk.funcname, ()),
         evaluated_args=list(thunk.arguments),
@@ -314,6 +353,12 @@ def response_if_func_call_parameters_evaluated(
     stack: ProgramStack,
 ) -> Callable[[], None]:
     def response() -> None:
+        cached = lookup_memo(
+            func, memo_key_for(call.funcname, evaluated_args), stack
+        )
+        if cached is not None:
+            handle_value_from_top_of_stack(cached, stack)
+            return
         frame = construct_function_call_frame(
             call=call, evaluated_args=evaluated_args, func=func
         )
@@ -394,10 +439,12 @@ def process_function_frame(frame: FunctionStackFrame, stack: ProgramStack) -> No
             handle_value_from_return_of_function(val, stack)
             return
 
+        memo_key = frame.memo_key
         stack.call_stack.pop(-1)
         if value_contains_thunk(val):
-            stack.call_stack.append(ForceFrame(val))
+            stack.call_stack.append(ForceFrame(val, memo_key=memo_key))
         else:
+            store_memo(memo_key, val, stack)
             continue_after_call_result(val, stack)
         return
 

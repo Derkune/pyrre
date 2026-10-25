@@ -562,17 +562,22 @@ class ExpressionStackFrame:
     reduce_to_thunk: bool = False
 
 
+MemoKey: TypeAlias = tuple[funcname, tuple[RRE_VALUE, ...]]
+
+
 @dataclass
 class FunctionStackFrame:
     funcname: funcname
     bindings: dict[str, RRE_VALUE] = field(default_factory=dict)
     current_line: int = 0
+    memo_key: MemoKey | None = None
 
 
 @dataclass
 class ForceFrame:
     value: RRE_VALUE
     forced_items: list[RRE_VALUE] = field(default_factory=list)
+    memo_key: MemoKey | None = None
 
 
 CallStackFrame: TypeAlias = FunctionStackFrame | ExpressionStackFrame | ForceFrame
@@ -584,6 +589,7 @@ class ProgramStack:
     program_inputs: list[RRE_VALUE]
     call_stack: list[CallStackFrame] = field(default_factory=list)
     final_value: None | RRE_VALUE = None
+    memo: dict[MemoKey, RRE_VALUE] = field(default_factory=dict)
 
     def copy_stack(self) -> ProgramStack:
         return ProgramStack(
@@ -591,4 +597,5 @@ class ProgramStack:
             copy.deepcopy(self.program_inputs),
             copy.deepcopy(self.call_stack),
             self.final_value,
+            copy.deepcopy(self.memo),
         )
