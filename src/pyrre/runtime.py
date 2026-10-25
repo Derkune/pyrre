@@ -23,20 +23,6 @@ from pyrre.types import (
 )
 
 
-def wrap_with_runtime_exception(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except (RuntimeErrorException, RRE_TypeErrorException) as expected:
-            raise expected
-        except Exception as err:
-            raise RuntimeErrorException(f"Error in '{func.__name__}': {err}") from err
-
-    return wrapper
-
-
-@wrap_with_runtime_exception
 def callee_returns_thunk(*, call_func: funcname, stack: ProgramStack) -> bool:
     if call_func in PRIMITIVE_OPS:
         return False
@@ -45,12 +31,10 @@ def callee_returns_thunk(*, call_func: funcname, stack: ProgramStack) -> bool:
     return FUNC_MODS.NON_EAGER in function.modifiers
 
 
-@wrap_with_runtime_exception
 def arg_reduces_to_thunk(*, call_func: funcname, arg_idx: int) -> bool:
     return call_func == "?" and arg_idx == 1
 
 
-@wrap_with_runtime_exception
 def find_main(function_names: Iterable[funcname]) -> funcname:
     for name in function_names:
         if name.lower() == "main":
@@ -59,7 +43,6 @@ def find_main(function_names: Iterable[funcname]) -> funcname:
     raise RuntimeErrorException("Can't find main")
 
 
-@wrap_with_runtime_exception
 def construct_point_of_entry_frame(stack: ProgramStack) -> FunctionStackFrame:
     main_name = find_main(stack.program.functions.keys())
     main_func = stack.program.functions[main_name]
@@ -73,7 +56,6 @@ def construct_point_of_entry_frame(stack: ProgramStack) -> FunctionStackFrame:
     return FunctionStackFrame(main_name, bindings)
 
 
-@wrap_with_runtime_exception
 def construct_function_call_frame(
     *, call: Call, evaluated_args: list[RRE_VALUE], func: FunctionDef
 ) -> FunctionStackFrame:
@@ -84,7 +66,6 @@ def construct_function_call_frame(
     return FunctionStackFrame(call.funcname, arg_vals)
 
 
-@wrap_with_runtime_exception
 def handle_value_from_top_of_stack(val: RRE_VALUE, stack: ProgramStack) -> None:
     if not stack.call_stack:
         if isinstance(val, RRE_THUNK):
@@ -108,7 +89,6 @@ def handle_value_from_top_of_stack(val: RRE_VALUE, stack: ProgramStack) -> None:
         raise RuntimeErrorException("Unkown type of a frame in call stack")
 
 
-@wrap_with_runtime_exception
 def handle_value_from_return_of_function(val: RRE_VALUE, stack: ProgramStack) -> None:
     top_frame = stack.call_stack[-1]
     if not isinstance(top_frame, FunctionStackFrame):
@@ -120,7 +100,6 @@ def handle_value_from_return_of_function(val: RRE_VALUE, stack: ProgramStack) ->
     handle_value_from_top_of_stack(val, stack)
 
 
-@wrap_with_runtime_exception
 def response_if_op_args_evaluated(
     *, funcname: funcname, evaluated_args: list[RRE_VALUE], stack: ProgramStack
 ) -> Callable[[], None]:
@@ -139,7 +118,6 @@ def response_if_op_args_evaluated(
     return response
 
 
-@wrap_with_runtime_exception
 def handle_func_call(
     *,
     call: Call,
@@ -171,7 +149,6 @@ def handle_func_call(
     )
 
 
-@wrap_with_runtime_exception
 def response_if_func_call_parameters_evaluated(
     *,
     call: Call,
@@ -189,7 +166,6 @@ def response_if_func_call_parameters_evaluated(
     return response
 
 
-@wrap_with_runtime_exception
 def get_func_expected_number_of_args(funcname: funcname, stack: ProgramStack) -> int:
     if funcname in PRIMITIVE_OPS:
         return EXPECTED_AMOUNT_OF_ARGS_IN_PRIMITIVE
@@ -198,7 +174,6 @@ def get_func_expected_number_of_args(funcname: funcname, stack: ProgramStack) ->
     return len(func.param_names)
 
 
-@wrap_with_runtime_exception
 def response_if_call_should_be_thunk(
     *, call: Call, evaluated_args: list[RRE_VALUE], stack: ProgramStack
 ) -> Callable[[], None]:
@@ -209,7 +184,6 @@ def response_if_call_should_be_thunk(
     return response
 
 
-@wrap_with_runtime_exception
 def process_expression_frame(frame: ExpressionStackFrame, stack: ProgramStack) -> None:
     if isinstance(frame.expr, Binding):
         binding_value = frame.bindings[frame.expr.bindname]
@@ -254,7 +228,6 @@ def process_expression_frame(frame: ExpressionStackFrame, stack: ProgramStack) -
         )
 
 
-@wrap_with_runtime_exception
 def process_function_frame(frame: FunctionStackFrame, stack: ProgramStack) -> None:
     function = stack.program.functions[frame.funcname]
 
@@ -275,7 +248,6 @@ def process_function_frame(frame: FunctionStackFrame, stack: ProgramStack) -> No
     )
 
 
-@wrap_with_runtime_exception
 def execute_step(stack: ProgramStack) -> ProgramStack:
     if stack.final_value is not None:
         raise RuntimeErrorException("execute_step after final_value is present")
