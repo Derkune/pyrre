@@ -484,6 +484,7 @@ PRIMITIVE_OPS: dict[
 @dataclass
 class ExpressionStackFrame:
     expr: Expr
+    caller_func: funcname
     bindings: ImmutableMappingViewWithIdx[str, RRE_VALUE]
     evaluated_args: list[RRE_VALUE] = field(default_factory=list)
 

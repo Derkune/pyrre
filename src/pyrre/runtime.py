@@ -18,6 +18,8 @@ from pyrre.types import (
     Call,
     PRIMITIVE_OPS,
     EXPECTED_AMOUNT_OF_ARGS_IN_PRIMITIVE,
+    RRE_THUNK,
+    FUNC_MODS,
 )
 
 
@@ -35,17 +37,20 @@ def wrap_with_runtime_exception(func):
 
 
 @wrap_with_runtime_exception
-def call_should_be_thunk() -> bool:
-    if caller_func_is_primitve:
-        if caller_op_is_condition and caller_arg_is_second:
+def call_should_be_thunk(
+    caller_func: funcname, caller_arg_idx: int, stack: ProgramStack
+) -> bool:
+    if caller_func in PRIMITIVE_OPS:
+        if caller_func == "?" and caller_arg_idx == 1:
             return True
         return False
 
-    if lazy_mod_present_in_caller:
-        if is_caller_main:
-            raise RuntimeErrorException("main cannot output lazily1")
+    function = stack.program.functions[caller_func]
+    if FUNC_MODS.NON_EAGER in function.modifiers:
+        if caller_func.lower() == "main" and len(stack.call_stack) == 1:
+            raise RuntimeErrorException("entry cannot output lazily1")
         return True
-    
+
     return False
 
 
@@ -117,14 +122,11 @@ def handle_value_from_return_of_function(val: RRE_VALUE, stack: ProgramStack) ->
 
 
 @wrap_with_runtime_exception
-def handle_primitive_op_call(
-    evaluated_args: list[RRE_VALUE],
-    frame_expr_call: Call,
-    bindings: ImmutableMappingViewWithIdx[str, RRE_VALUE],
-    stack: ProgramStack,
-) -> None:
-    if len(evaluated_args) == EXPECTED_AMOUNT_OF_ARGS_IN_PRIMITIVE:
-        func = PRIMITIVE_OPS[frame_expr_call.funcname]
+def response_if_op_args_evaluated(
+    funcname: funcname, evaluated_args: list[RRE_VALUE], stack: ProgramStack
+) -> Callable[[], None]:
+    def response() -> None:
+        func = PRIMITIVE_OPS[funcname]
 
         handle_value_from_top_of_stack(
             func(
@@ -134,43 +136,64 @@ def handle_primitive_op_call(
             ),
             stack,
         )
-        return
 
-    if len(evaluated_args) > EXPECTED_AMOUNT_OF_ARGS_IN_PRIMITIVE:
-        raise RuntimeErrorException(
-            f"expected {EXPECTED_AMOUNT_OF_ARGS_IN_PRIMITIVE} args for a primitive func, got {len(evaluated_args)}"
-        )
-
-    stack.call_stack.append(
-        ExpressionStackFrame(
-            frame_expr_call.params[len(evaluated_args)],
-            bindings,
-        )
-    )
+    return response
 
 
 @wrap_with_runtime_exception
 def handle_func_call(
     call: Call,
     evaluated_args: list[RRE_VALUE],
+    caller_func: funcname,
     bindings: ImmutableMappingViewWithIdx[str, RRE_VALUE],
+    expected_number_of_args: int,
+    response_if_args_evaluated: Callable[[], None],
     stack: ProgramStack,
 ) -> None:
-    func = stack.program.functions[call.funcname]
-    if len(evaluated_args) == len(func.param_names):
-        stack.call_stack.append(
-            construct_function_call_frame(call, evaluated_args, func)
-        )
+    if len(evaluated_args) == expected_number_of_args:
+        response_if_args_evaluated()
         return
 
-    if len(evaluated_args) > len(func.param_names):
+    if len(evaluated_args) > expected_number_of_args:
         raise RuntimeErrorException(
             "more than expected amount of args in handle_func_call"
         )
 
     stack.call_stack.append(
-        ExpressionStackFrame(call.params[len(evaluated_args)], bindings)
+        ExpressionStackFrame(call.params[len(evaluated_args)], caller_func, bindings)
     )
+
+
+@wrap_with_runtime_exception
+def response_if_func_call_parameters_evaluated(
+    call: Call, evaluated_args: list[RRE_VALUE], func: FunctionDef, stack: ProgramStack
+) -> Callable[[], None]:
+    def response() -> None:
+        stack.call_stack.append(
+            construct_function_call_frame(call, evaluated_args, func)
+        )
+
+    return response
+
+
+@wrap_with_runtime_exception
+def get_func_expected_number_of_args(funcname: funcname, stack: ProgramStack) -> int:
+    if funcname in PRIMITIVE_OPS:
+        return EXPECTED_AMOUNT_OF_ARGS_IN_PRIMITIVE
+
+    func = stack.program.functions[funcname]
+    return len(func.param_names)
+
+
+@wrap_with_runtime_exception
+def response_if_call_should_be_thunk(
+    call: Call, evaluated_args: list[RRE_VALUE], stack: ProgramStack
+) -> Callable[[], None]:
+    def response() -> None:
+        val = RRE_THUNK(call.funcname, tuple(evaluated_args))
+        handle_value_from_top_of_stack(val, stack)
+
+    return response
 
 
 @wrap_with_runtime_exception
@@ -178,17 +201,50 @@ def process_expression_frame(frame: ExpressionStackFrame, stack: ProgramStack) -
     if isinstance(frame.expr, Binding):
         binding_value = frame.bindings[frame.expr.bindname]
         handle_value_from_top_of_stack(binding_value, stack)
-        return
     elif isinstance(frame.expr, get_args(RRE_VALUE)):
         handle_value_from_top_of_stack(cast(RRE_VALUE, frame.expr), stack)
     elif isinstance(frame.expr, Call):
-        if frame.expr.funcname in PRIMITIVE_OPS:
-            handle_primitive_op_call(
-                frame.evaluated_args, frame.expr, frame.bindings, stack
+        if call_should_be_thunk(frame.caller_func, len(frame.evaluated_args), stack):
+            handle_func_call(
+                frame.expr,
+                frame.evaluated_args,
+                frame.caller_func,
+                frame.bindings,
+                get_func_expected_number_of_args(frame.expr.funcname, stack),
+                response_if_call_should_be_thunk(
+                    frame.expr, frame.evaluated_args, stack
+                ),
+                stack,
             )
             return
 
-        handle_func_call(frame.expr, frame.evaluated_args, frame.bindings, stack)
+        if frame.expr.funcname in PRIMITIVE_OPS:
+            handle_func_call(
+                frame.expr,
+                frame.evaluated_args,
+                frame.caller_func,
+                frame.bindings,
+                get_func_expected_number_of_args(frame.expr.funcname, stack),
+                response_if_op_args_evaluated(
+                    frame.expr.funcname, frame.evaluated_args, stack
+                ),
+                stack,
+            )
+            return
+
+        func = stack.program.functions[frame.expr.funcname]
+
+        handle_func_call(
+            frame.expr,
+            frame.evaluated_args,
+            frame.caller_func,
+            frame.bindings,
+            get_func_expected_number_of_args(frame.expr.funcname, stack),
+            response_if_func_call_parameters_evaluated(
+                frame.expr, frame.evaluated_args, func, stack
+            ),
+            stack,
+        )
     else:
         raise RuntimeErrorException(
             "unknown type in frame.expr in process_statement_frame"
@@ -209,7 +265,9 @@ def process_function_frame(frame: FunctionStackFrame, stack: ProgramStack) -> No
     pending_line: BindingLine = function.lines[frame.current_line]
     stack.call_stack.append(
         ExpressionStackFrame(
-            pending_line.expr, ImmutableMappingViewWithIdx(frame.bindings)
+            pending_line.expr,
+            frame.funcname,
+            ImmutableMappingViewWithIdx(frame.bindings),
         )
     )
 
