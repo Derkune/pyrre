@@ -1,6 +1,7 @@
 import copy
 from typing import Iterable, Type, Callable, get_args, cast
 from functools import wraps
+from dataclasses import dataclass, field
 
 from pyrre.types import (
     ProgramStack,
@@ -26,6 +27,7 @@ from pyrre.types import (
     RRE_LIST,
     FUNC_MODS,
     is_truthy,
+    Program,
 )
 
 
@@ -448,3 +450,21 @@ def execute_step(stack: ProgramStack) -> ProgramStack:
         raise RuntimeErrorException("Unkown type of a frame in call stack")
 
     return stack
+
+
+@dataclass
+class Runtime:
+    program: Program
+    program_inputs: list[RRE_VALUE]
+    history: list[ProgramStack] = field(default_factory=list)
+
+    def run_program(self, max_steps: int = 1000000) -> RRE_VALUE:
+        stack: ProgramStack = ProgramStack(self.program, self.program_inputs)
+
+        for _ in range(max_steps):
+            self.history.append(stack)
+            stack = execute_step(stack)
+            if stack.final_value:
+                return stack.final_value
+
+        raise RuntimeErrorException("Ran over max amount of steps")
