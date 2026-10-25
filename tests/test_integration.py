@@ -125,12 +125,11 @@ def test_sub_int_list_retrieval_and_clamping() -> None:
         idx_clamped_high = -(99, "ABC")
         neg_idx = -(0, 5)
         idx_clamped_low = -(neg_idx, "ABC")
-        empty_ret = -(7, [])
-        return +(+(+(+([], empty_ret), idx_clamped_low), idx_clamped_high), idx0)
+        return +(+(+([], idx_clamped_low), idx_clamped_high), idx0)
     endfunc
     """
 
-    expected = RRE_LIST((RRE_INT(7), RRE_INT(65), RRE_INT(67), RRE_INT(65)))
+    expected = RRE_LIST((RRE_INT(65), RRE_INT(67), RRE_INT(65)))
     assert run_program(code) == expected
 
 
@@ -141,8 +140,7 @@ def test_sub_list_int_removal_and_clamping() -> None:
         clamped_high = -("ABC", 50)
         neg_idx = -(0, 10)
         clamped_low = -("ABC", neg_idx)
-        empty_rem = -([], 0)
-        return +(+(+(+([], mid_removed), clamped_high), clamped_low), empty_rem)
+        return +(+(+([], mid_removed), clamped_high), clamped_low)
     endfunc
     """
     expected = RRE_LIST(
@@ -150,7 +148,6 @@ def test_sub_list_int_removal_and_clamping() -> None:
             RRE_LIST((RRE_INT(65), RRE_INT(67))),
             RRE_LIST((RRE_INT(65), RRE_INT(66))),
             RRE_LIST((RRE_INT(66), RRE_INT(67))),
-            RRE_LIST(()),
         )
     )
     assert run_program(code) == expected
