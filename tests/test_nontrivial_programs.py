@@ -49,10 +49,14 @@ func main(n)
 endfunc
 
 func tri(n, acc)%
-    return -(
-        -(1, >(0, n)),
-        +(+(acc, []), tri(-(n, 1), +(acc, n)))
-    )
+    done = >(0, n)
+    index = -(1, done)
+    base = +(acc, [])
+    smaller = -(n, 1)
+    summed = +(acc, n)
+    recur = tri(smaller, summed)
+    choices = +(base, recur)
+    return -(index, choices)
 endfunc
 """
 
@@ -70,5 +74,6 @@ def test_triangular_number(n: int, expected: int) -> None:
         TRIANGULAR,
         inputs=[RRE_INT(n)],
         max_steps=10000,
+        to_dump_history=False,
     )
     assert result == RRE_INT(expected)
