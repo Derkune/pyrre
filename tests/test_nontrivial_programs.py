@@ -157,3 +157,50 @@ def test_reverse_list(values: list[int], expected: list[int]) -> None:
         to_dump_history=False,
     )
     assert result == _int_list(expected)
+
+
+MULTIPLY: str = """
+func main(a, b)
+    nonneg = >(b, 0)
+    pos = times(a, b)
+    neg = -(0, times(a, -(0, b)))
+    pick = -(1, nonneg)
+    choices = +(+(pos, []), neg)
+    return -(pick, choices)
+endfunc
+
+func times(a, count)
+    done = >(0, count)
+    smaller = -(count, 1)
+    rest = ?(done, +(a, times(a, smaller)))
+    return -(rest, done)
+endfunc
+"""
+
+
+@pytest.mark.parametrize(
+    "a, b, expected",
+    [
+        (0, 0, 0),
+        (0, 5, 0),
+        (5, 0, 0),
+        (0, -5, 0),
+        (-2, 0, 0),
+        (1, 7, 7),
+        (7, 1, 7),
+        (3, 4, 12),
+        (6, 7, 42),
+        (-3, 4, -12),
+        (3, -4, -12),
+        (-3, -4, 12),
+        (-1, -1, 1),
+    ],
+)
+def test_multiply(a: int, b: int, expected: int) -> None:
+    result = run_program(
+        MULTIPLY,
+        inputs=[RRE_INT(a), RRE_INT(b)],
+        max_steps=10000,
+        to_dump_history=False,
+    )
+    assert result == RRE_INT(expected)
