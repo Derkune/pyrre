@@ -251,7 +251,7 @@ def RRE_PLUS(val1: RRE_VALUE, val2: RRE_VALUE, _: FunctionMappingView) -> RRE_VA
         case RRE_ERROR(), RRE_THUNK():
             return val1
         case RRE_ERROR(), RRE_ERROR():
-            return RRE_ERROR(f"{val1.msg}|{val2.msg}")
+            return RRE_ERROR(f"{val1.msg}+{val2.msg}")
         #
         case _:
             raise RRE_TypeErrorException("Unknown type in RRE_PLUS")
@@ -366,12 +366,14 @@ def RRE_MINUS(
         case RRE_INT(), RRE_LIST():
             lst_idx = try_clamp_lst_idx(val1.value, len(val2.value))
             if lst_idx is None:
-                return val1
+                return RRE_ERROR("val1 is out of bounds")
+
             return val2.value[lst_idx]
         case RRE_INT(), RRE_THUNK():
             lst_idx = try_clamp_lst_idx(val1.value, len(val2.arguments))
             if lst_idx is None:
-                return val1
+                return RRE_ERROR("val1 is out of bounds")
+
             return val2.arguments[lst_idx]
         case RRE_INT(), RRE_ERROR():
             return val2
@@ -379,7 +381,7 @@ def RRE_MINUS(
         case RRE_LIST(), RRE_INT():
             lst_idx = try_clamp_lst_idx(val2.value, len(val1.value))
             if lst_idx is None:
-                return val1
+                return RRE_ERROR("val1 is out of bounds")
 
             lst = list(val1.value)
             lst.pop(lst_idx)
@@ -394,7 +396,7 @@ def RRE_MINUS(
         case RRE_THUNK(), RRE_INT():
             lst_idx = try_clamp_lst_idx(val2.value, len(val1.arguments))
             if lst_idx is None:
-                return val1
+                return RRE_ERROR("val1 is out of bounds")
 
             lst = list(val1.arguments)
             lst.pop(lst_idx)
@@ -418,7 +420,7 @@ def RRE_MINUS(
         case RRE_ERROR(), RRE_THUNK():
             return val1
         case RRE_ERROR(), RRE_ERROR():
-            return RRE_ERROR(f"{val1.msg}|{val2.msg}")
+            return RRE_ERROR(f"{val1.msg}-{val2.msg}")
         #
         case _:
             raise RRE_TypeErrorException("Unknown type in RRE_MINUS")
@@ -436,7 +438,7 @@ def RRE_COMPARE(
     val1: RRE_VALUE, val2: RRE_VALUE, functions: FunctionMappingView
 ) -> RRE_VALUE:
     if isinstance(val1, RRE_ERROR) and isinstance(val2, RRE_ERROR):
-        return RRE_ERROR(f"{val1.msg}|{val2.msg}")
+        return RRE_ERROR(f"{val1.msg}≥{val2.msg}")
     if isinstance(val1, RRE_ERROR):
         return val1
     if isinstance(val2, RRE_ERROR):
@@ -448,11 +450,6 @@ def RRE_COMPARE(
 def RRE_CONDITION(
     val1: RRE_VALUE, val2: RRE_VALUE, _: FunctionMappingView
 ) -> RRE_VALUE:
-    if not isinstance(val2, RRE_THUNK):
-        raise RRE_TypeErrorException(
-            "expected a thunk, got some other value in RRE_CONDITION"
-        )
-
     if isinstance(val1, RRE_ERROR):
         return val1
 
