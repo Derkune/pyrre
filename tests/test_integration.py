@@ -281,6 +281,27 @@ def test_error_missing_main_entry_point() -> None:
         run_program(code)
 
 
+def test_error_parameter_named_underscore() -> None:
+    code = """
+    func main(_)
+        return 0
+    endfunc
+    """
+    with pytest.raises(ParserErrorException):
+        run_program(code)
+
+
+def test_error_binding_named_underscore() -> None:
+    code = """
+    func main()
+        _ = 10
+        return 0
+    endfunc
+    """
+    with pytest.raises(ParserErrorException):
+        run_program(code)
+
+
 def test_error_binding_name_collides_with_argument() -> None:
     code = """
     func main(arg1)

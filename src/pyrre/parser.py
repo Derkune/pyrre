@@ -259,6 +259,15 @@ def _check_references_existing_binds(program: Program) -> None:
             funcbinds.add(line.bind_name)
 
 
+def _check_reserved_ommitted_name(program: Program) -> None:
+    for func in program.functions.values():
+        if OMMITTED_ARG in func.param_names:
+            raise ParserErrorException("_ is reserved for omitted arguments")
+        for line in func.lines:
+            if line.bind_name == OMMITTED_ARG:
+                raise ParserErrorException("_ is reserved for omitted arguments")
+
+
 def _check_unique_exprs(program: Program) -> None:
     for func in program.functions.values():
         params = set(func.param_names)
@@ -332,6 +341,7 @@ def _post_parse_correctness(program: Program) -> Program:
     _check_unique_func_names_and_starting_letters(program)
     _check_calls_existing(program)
     _check_unique_exprs(program)
+    _check_reserved_ommitted_name(program)
     _check_references_existing_binds(program)
     _check_ommitted_params_come_last(program)
     _check_main_is_not_lazy(program)

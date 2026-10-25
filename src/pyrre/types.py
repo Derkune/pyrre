@@ -381,7 +381,7 @@ def RRE_MINUS(
         case RRE_LIST(), RRE_INT():
             lst_idx = try_clamp_lst_idx(val2.value, len(val1.value))
             if lst_idx is None:
-                return RRE_ERROR("val1 is out of bounds")
+                return RRE_ERROR("val2 is out of bounds")
 
             lst = list(val1.value)
             lst.pop(lst_idx)
@@ -396,7 +396,7 @@ def RRE_MINUS(
         case RRE_THUNK(), RRE_INT():
             lst_idx = try_clamp_lst_idx(val2.value, len(val1.arguments))
             if lst_idx is None:
-                return RRE_ERROR("val1 is out of bounds")
+                return RRE_ERROR("val2 is out of bounds")
 
             lst = list(val1.arguments)
             lst.pop(lst_idx)
