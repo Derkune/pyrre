@@ -10,14 +10,17 @@ from pyrre.types import (
 from pyrre.lexer import lex
 from pyrre.parser import parse
 from pyrre.runtime import execute_step
+from pyrre.dumping import dump_history
 
 import pytest
 
 
 def run_program(
     code: str,
+    *,
     inputs: None | list[Any] = None,
     max_steps: int = 1000,
+    to_dump_history: bool = False,
 ) -> Any:
     if inputs is None:
         inputs = []
@@ -25,10 +28,20 @@ def run_program(
     parsed = parse(lexed)
     stack = ProgramStack(parsed, inputs)
 
+    history = []
     for _ in range(max_steps):
+        history.append(stack)
         if stack.final_value is not None:
+            if to_dump_history:
+                with open("dump.txt", "w") as _f:
+                    _f.write(dump_history(history, parsed))
+
             return stack.final_value
         stack = execute_step(stack)
+
+    if to_dump_history:
+        with open("dump.txt", "w") as _f:
+            _f.write(dump_history(history))
 
     pytest.fail(f"Execution exceeded max steps ({max_steps}) without returning.")
 
@@ -217,7 +230,7 @@ def test_function_modifiers_and_distinct_letters() -> None:
         return -(v, 5)
     endfunc
     """
-    assert run_program(code) == RRE_INT(25)
+    assert run_program(code, to_dump_history=False) == RRE_INT(25)
 
 
 def test_main_with_arguments() -> None:
