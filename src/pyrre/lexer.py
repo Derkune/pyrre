@@ -8,6 +8,7 @@ from pyrre.types import (
     SINGLE_CHAR_TOKENS,
     LexerErrorException,
 )
+from pyrre.static_config import MAX_INT, MAX_LIST_LENGTH
 
 
 def _try_commit_accumulated(accumulated: list[str], lexed: list[Token]) -> None:
@@ -28,6 +29,8 @@ def _try_commit_accumulated(accumulated: list[str], lexed: list[Token]) -> None:
             return
 
     if charset.issubset(string.digits):
+        if int(joined) > MAX_INT:
+            raise LexerErrorException(f"{joined} is out of range for ints")
         lexed.append(Token(TokenType.CONSTINT, joined))
         return
 
@@ -51,7 +54,10 @@ def lex(text: str) -> list[Token]:
     for char in text:
         if char == QUOTE:
             if inside_quote:
-                lexed.append(Token(TokenType.CONSTSTR, "".join(accumulated)))
+                joined = "".join(accumulated)
+                if len(joined) > MAX_LIST_LENGTH:
+                    raise LexerErrorException("string is too long")
+                lexed.append(Token(TokenType.CONSTSTR, joined))
                 accumulated = []
             inside_quote = not inside_quote
             continue

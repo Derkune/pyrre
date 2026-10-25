@@ -28,6 +28,7 @@ from pyrre.static_config import (
     MAX_INT,
     MIN_INT,
     MAX_LIST_LENGTH,
+    MAX_ARGS,
 )
 
 
@@ -120,6 +121,8 @@ class Parser:
             name = self.current().text
             self.match(TokenType.NAME)
             params.append(name)
+            if len(params) > MAX_ARGS:
+                raise ParserErrorException("too many function parameters")
             if self.current().token_type == TokenType.COMMA:
                 self.match(TokenType.COMMA)
             else:
@@ -159,9 +162,9 @@ class Parser:
             case TokenType.CONSTINT:
                 self.match(TokenType.CONSTINT)
                 val = int(text)
-                if MIN_INT > val > MAX_INT:
+                if val < MIN_INT or val > MAX_INT:
                     raise ParserErrorException(f"{text} is out of range for ints")
-                return RRE_INT(int(text))
+                return RRE_INT(val)
             case TokenType.CONSTEMPTYLST:
                 self.match(TokenType.CONSTEMPTYLST)
                 return RRE_LIST(tuple())
@@ -186,6 +189,8 @@ class Parser:
         exprs: list[Expr] = []
         for _ in finite_while():
             exprs.append(self._parse_expression())
+            if len(exprs) > MAX_ARGS:
+                raise ParserErrorException("too many call arguments")
             if self.current().token_type == TokenType.COMMA:
                 self.match(TokenType.COMMA)
             else:

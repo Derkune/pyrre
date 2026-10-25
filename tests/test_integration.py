@@ -7,6 +7,8 @@ from pyrre.types import (
     RRE_ERROR,
     ParserErrorException,
     LexerErrorException,
+    Token,
+    TokenType,
 )
 from pyrre.lexer import lex
 from pyrre.parser import parse
@@ -351,6 +353,98 @@ def test_error_invalid_string_character() -> None:
     code = 'func main()\n    return "\n"\nendfunc'
     with pytest.raises(ParserErrorException):
         run_program(code)
+
+
+def test_max_int_literal_accepted() -> None:
+    code = """
+    func main()
+        return 127
+    endfunc
+    """
+    assert run_program(code) == RRE_INT(127)
+
+
+def test_error_int_literal_above_max() -> None:
+    code = """
+    func main()
+        return 128
+    endfunc
+    """
+    with pytest.raises(LexerErrorException):
+        run_program(code)
+
+
+def test_max_length_string_literal_accepted() -> None:
+    code = 'func main()\n    return "ABCDEFGHIJKLMNOP"\nendfunc'
+    expected = RRE_LIST(tuple(RRE_INT(ord(c)) for c in "ABCDEFGHIJKLMNOP"))
+    assert run_program(code) == expected
+
+
+def test_error_string_literal_too_long() -> None:
+    code = 'func main()\n    return "ABCDEFGHIJKLMNOPQ"\nendfunc'
+    with pytest.raises(LexerErrorException):
+        run_program(code)
+
+
+def test_max_args_params_and_call_accepted() -> None:
+    code = """
+    func main()
+        return other(1, 2, 3)
+    endfunc
+
+    func other(a, b, c)
+        return +(+(a, b), c)
+    endfunc
+    """
+    assert run_program(code) == RRE_INT(6)
+
+
+def test_error_too_many_function_parameters() -> None:
+    code = """
+    func main(a, b, c, d)
+        return a
+    endfunc
+    """
+    with pytest.raises(ParserErrorException):
+        run_program(code)
+
+
+def test_error_too_many_call_arguments() -> None:
+    code = """
+    func main()
+        return other(1, 2, 3, 4)
+    endfunc
+
+    func other(a)
+        return a
+    endfunc
+    """
+    with pytest.raises(ParserErrorException):
+        run_program(code)
+
+
+def _main_returning_int_tokens(text: str) -> list[Token]:
+    return [
+        Token(TokenType.FUNCDEF, "func"),
+        Token(TokenType.NAME, "main"),
+        Token(TokenType.LEFTPAR, "("),
+        Token(TokenType.RIGHTPAR, ")"),
+        Token(TokenType.RETURN, "return"),
+        Token(TokenType.CONSTINT, text),
+        Token(TokenType.ENDFUNCDEF, "endfunc"),
+        Token(TokenType.EOF, "EOF"),
+    ]
+
+
+def test_min_int_token_accepted() -> None:
+    program = parse(_main_returning_int_tokens("-128"))
+    return_expr = program.functions["main"].lines[-1].expr
+    assert return_expr == RRE_INT(-128)
+
+
+def test_error_int_token_below_min() -> None:
+    with pytest.raises(ParserErrorException):
+        parse(_main_returning_int_tokens("-129"))
 
 
 def test_choice_truthy_returns_first_arg() -> None:
