@@ -201,6 +201,9 @@ def process_function_frame(frame: FunctionStackFrame, stack: ProgramStack) -> No
 
 @wrap_with_runtime_exception
 def execute_step(stack: ProgramStack) -> ProgramStack:
+    if stack.final_value is not None:
+        raise RuntimeErrorException("execute_step after final_value is present")
+
     stack = stack.copy_stack()
 
     if not stack.call_stack:

@@ -126,11 +126,11 @@ class Parser:
 
         raise ParserErrorException("Went over finite iteration limit")
 
-    def _parse_func_mods(self) -> immutable_list[FUNC_MODS]:
+    def _parse_func_mods(self) -> frozenset[FUNC_MODS]:
         mods: list[FUNC_MODS] = []
         for _ in finite_while():
             if self.current().token_type != TokenType.FUNCMOD:
-                return tuple(mods)
+                return frozenset(mods)
             mods.append(FUNC_MODS(self.current().text))
             self.match(TokenType.FUNCMOD)
 

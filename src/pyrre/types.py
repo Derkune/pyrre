@@ -194,7 +194,7 @@ class BindingLine:
 @dataclass(frozen=True)
 class FunctionDef:
     name: funcname
-    modifiers: immutable_list[FUNC_MODS]
+    modifiers: frozenset[FUNC_MODS]
     param_names: immutable_list[str]
     lines: immutable_list[BindingLine]
 
