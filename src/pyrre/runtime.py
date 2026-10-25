@@ -37,19 +37,17 @@ def wrap_with_runtime_exception(func):
 
 
 @wrap_with_runtime_exception
-def call_should_be_thunk(
-    *, call_func: funcname, caller_arg_idx: int, stack: ProgramStack
-) -> bool:
+def callee_returns_thunk(*, call_func: funcname, stack: ProgramStack) -> bool:
     if call_func in PRIMITIVE_OPS:
-        if call_func == "?" and caller_arg_idx == 1:
-            return True
         return False
 
     function = stack.program.functions[call_func]
-    if FUNC_MODS.NON_EAGER in function.modifiers:
-        return True
+    return FUNC_MODS.NON_EAGER in function.modifiers
 
-    return False
+
+@wrap_with_runtime_exception
+def arg_reduces_to_thunk(*, call_func: funcname, arg_idx: int) -> bool:
+    return call_func == "?" and arg_idx == 1
 
 
 @wrap_with_runtime_exception
@@ -162,7 +160,14 @@ def handle_func_call(
         )
 
     stack.call_stack.append(
-        ExpressionStackFrame(call.params[len(evaluated_args)], caller_func, bindings)
+        ExpressionStackFrame(
+            call.params[len(evaluated_args)],
+            caller_func,
+            bindings,
+            reduce_to_thunk=arg_reduces_to_thunk(
+                call_func=call.funcname, arg_idx=len(evaluated_args)
+            ),
+        )
     )
 
 
@@ -212,45 +217,25 @@ def process_expression_frame(frame: ExpressionStackFrame, stack: ProgramStack) -
     elif isinstance(frame.expr, get_args(RRE_VALUE)):
         handle_value_from_top_of_stack(cast(RRE_VALUE, frame.expr), stack)
     elif isinstance(frame.expr, Call):
-        if call_should_be_thunk(
-            call_func=frame.expr.funcname,
-            caller_arg_idx=len(frame.evaluated_args),
-            stack=stack,
+        if frame.reduce_to_thunk or callee_returns_thunk(
+            call_func=frame.expr.funcname, stack=stack
         ):
-            handle_func_call(
-                call=frame.expr,
+            response_if_args_evaluated = response_if_call_should_be_thunk(
+                call=frame.expr, evaluated_args=frame.evaluated_args, stack=stack
+            )
+        elif frame.expr.funcname in PRIMITIVE_OPS:
+            response_if_args_evaluated = response_if_op_args_evaluated(
+                funcname=frame.expr.funcname,
                 evaluated_args=frame.evaluated_args,
-                caller_func=frame.caller_func,
-                bindings=frame.bindings,
-                expected_number_of_args=get_func_expected_number_of_args(
-                    frame.expr.funcname, stack
-                ),
-                response_if_args_evaluated=response_if_call_should_be_thunk(
-                    call=frame.expr, evaluated_args=frame.evaluated_args, stack=stack
-                ),
                 stack=stack,
             )
-            return
-
-        if frame.expr.funcname in PRIMITIVE_OPS:
-            handle_func_call(
+        else:
+            response_if_args_evaluated = response_if_func_call_parameters_evaluated(
                 call=frame.expr,
                 evaluated_args=frame.evaluated_args,
-                caller_func=frame.caller_func,
-                bindings=frame.bindings,
-                expected_number_of_args=get_func_expected_number_of_args(
-                    frame.expr.funcname, stack
-                ),
-                response_if_args_evaluated=response_if_op_args_evaluated(
-                    funcname=frame.expr.funcname,
-                    evaluated_args=frame.evaluated_args,
-                    stack=stack,
-                ),
+                func=stack.program.functions[frame.expr.funcname],
                 stack=stack,
             )
-            return
-
-        func = stack.program.functions[frame.expr.funcname]
 
         handle_func_call(
             call=frame.expr,
@@ -260,12 +245,7 @@ def process_expression_frame(frame: ExpressionStackFrame, stack: ProgramStack) -
             expected_number_of_args=get_func_expected_number_of_args(
                 frame.expr.funcname, stack
             ),
-            response_if_args_evaluated=response_if_func_call_parameters_evaluated(
-                call=frame.expr,
-                evaluated_args=frame.evaluated_args,
-                func=func,
-                stack=stack,
-            ),
+            response_if_args_evaluated=response_if_args_evaluated,
             stack=stack,
         )
     else:

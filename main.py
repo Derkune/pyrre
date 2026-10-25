@@ -6,7 +6,7 @@ from pyrre.dumping import dump_history
 
 
 if __name__ == "__main__":
-    with open("lazyfunc.rre", "r", encoding="utf-8") as _f:
+    with open("simplechoise.rre", "r", encoding="utf-8") as _f:
         lexed = lex(_f.read())
         parsed = parse(lexed)
         pass

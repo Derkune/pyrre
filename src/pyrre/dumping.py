@@ -39,6 +39,7 @@ def dump_expression_frame(frame: ExpressionStackFrame) -> list[str]:
 
     lines.append(f"###### FRAME EXRESSION {frame.expr}")
     lines.append(f"###### FRAME CALLER FUNC {frame.caller_func}")
+    lines.append(f"###### FRAME REDUCE TO THUNK {frame.reduce_to_thunk}")
     lines.append(
         f"###### FRAME EVALUATED ARGS {dumps_obj_json_with_dataclass(frame.evaluated_args)}"
     )

@@ -332,3 +332,38 @@ def test_error_invalid_string_character() -> None:
     code = 'func main()\n    return "\n"\nendfunc'
     with pytest.raises(ParserErrorException):
         run_program(code)
+
+
+def test_choice_truthy_returns_first_arg() -> None:
+    code = """
+    func main()
+        return ?(1, +(1, 1))
+    endfunc
+    """
+    assert run_program(code) == RRE_INT(1)
+
+
+def test_choice_truthy_does_not_enter_second_arg() -> None:
+    code = """
+    func main()
+        return ?(1, rec(1))
+    endfunc
+
+    func rec(n)
+        return rec(n)
+    endfunc
+    """
+    assert run_program(code) == RRE_INT(1)
+
+
+def test_lazy_function_stores_evaluated_args_as_thunk() -> None:
+    code = """
+    func main()
+        return -(0, lazy(+(1, 2), 4))
+    endfunc
+
+    func lazy(a, b)%
+        return +(a, b)
+    endfunc
+    """
+    assert run_program(code) == RRE_INT(3)
