@@ -417,8 +417,8 @@ def process_force_frame(frame: ForceFrame, stack: ProgramStack) -> None:
         raise RuntimeErrorException("unknown value in process_force_frame")
 
     items = val.value
-    while len(frame.forced_items) < len(items):
-        item = items[len(frame.forced_items)]
+    start = len(frame.forced_items)
+    for item in items[start:]:
         if value_contains_thunk(item):
             stack.call_stack.append(ForceFrame(item))
             return
