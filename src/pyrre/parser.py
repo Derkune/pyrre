@@ -10,6 +10,8 @@ from pyrre.types import (
     Expr,
     RRE_INT,
     RRE_LIST,
+    RRE_ERROR,
+    ERROR_CONST_SYMBOL,
     ParserErrorException,
     Binding,
     Call,
@@ -173,6 +175,8 @@ class Parser:
                 return parse_RRE_string(text)
             case TokenType.NAME:
                 self.match(TokenType.NAME)
+                if text == ERROR_CONST_SYMBOL:
+                    return self._parse_error_constant()
                 if self.current().token_type == TokenType.LEFTPAR:
                     return Call(text, self._parse_call_args())
                 else:
@@ -198,6 +202,18 @@ class Parser:
                 break
 
         return tuple(exprs)
+
+    def _parse_error_constant(self) -> RRE_ERROR:
+        self.match(TokenType.LEFTPAR)
+        if self.current().token_type != TokenType.CONSTSTR:
+            raise ParserErrorException(
+                "Error constant ~ requires a single string argument"
+            )
+        text = self.current().text
+        self.match(TokenType.CONSTSTR)
+        parse_RRE_string(text)
+        self.match(TokenType.RIGHTPAR)
+        return RRE_ERROR(text)
 
     def _parse_expr_line(self) -> BindingLine:
         constname = self.current().text

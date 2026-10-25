@@ -877,3 +877,60 @@ def test_percent_return_does_not_force_nested_thunk() -> None:
     endfunc
     """
     assert run_program(code) == RRE_INT(1)
+
+
+def test_error_constant_returns_message() -> None:
+    code = """
+    func main()
+        return ~("Error message")
+    endfunc
+    """
+    assert run_program(code) == RRE_ERROR("Error message")
+
+
+def test_error_constant_infects_plus() -> None:
+    code = """
+    func main()
+        return +(~("a"), 1)
+    endfunc
+    """
+    assert run_program(code) == RRE_ERROR("a")
+
+
+def test_error_constant_combines_two_errors() -> None:
+    code = """
+    func main()
+        return +(~("a"), ~("b"))
+    endfunc
+    """
+    assert run_program(code) == RRE_ERROR("a+b")
+
+
+def test_error_constant_empty_message() -> None:
+    code = """
+    func main()
+        return ~("")
+    endfunc
+    """
+    assert run_program(code) == RRE_ERROR("")
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "~()",
+        '~("a", "b")',
+        "~(1)",
+        "~([])",
+        "~(name)",
+        '~(+("a", "b"))',
+    ],
+)
+def test_error_constant_rejects_non_string_argument(bad: str) -> None:
+    code = f"""
+    func main()
+        return {bad}
+    endfunc
+    """
+    with pytest.raises(ParserErrorException):
+        run_program(code)

@@ -103,6 +103,7 @@ class TokenType(enum.Enum):
 
 
 PRIMITIVE_OP_SYMBOLS: str = "+-?≥" + ">"  # last one is an alias
+ERROR_CONST_SYMBOL: str = "~"
 SINGLE_CHAR_TOKENS: dict[str, TokenType] = dict(
     [
         (TokenType.LEFTPAR.value, TokenType.LEFTPAR),
@@ -111,7 +112,7 @@ SINGLE_CHAR_TOKENS: dict[str, TokenType] = dict(
         (TokenType.EQUALS.value, TokenType.EQUALS),
     ]
     + [(char, TokenType.FUNCMOD) for char in TokenType.FUNCMOD.value]
-    + [(char, TokenType.NAME) for char in PRIMITIVE_OP_SYMBOLS]
+    + [(char, TokenType.NAME) for char in PRIMITIVE_OP_SYMBOLS + ERROR_CONST_SYMBOL]
 )
 
 
