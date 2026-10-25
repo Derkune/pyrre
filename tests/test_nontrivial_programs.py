@@ -257,3 +257,123 @@ def test_caps(values: list[int], expected: list[int]) -> None:
         to_dump_history=False,
     )
     assert result == _int_list(expected)
+
+
+MODULATE: str = """
+func main(mods, data)
+    return step(mods, data, [])
+endfunc
+
+func step(mods, data, acc)
+    empty = >([], mods)
+    index = -(1, empty)
+    base = +([], acc)
+    recur = ?(
+        empty,
+        step(
+            -(mods, 0),
+            -(data, 0),
+            +(acc, pick(-(0, mods), -(0, data)))
+        )
+    )
+    choices = +(base, recur)
+    return -(index, choices)
+endfunc
+
+func pick(code, item)
+    t0 = keep(item)
+    t1 = inc(item)
+    t2 = zero(item)
+    t3 = blank(item)
+    t4 = four(item)
+    t5 = wrap(item)
+    t6 = nest(item)
+    c0 = +([], t0)
+    c1 = +(c0, t1)
+    c2 = +(c1, t2)
+    c3 = +(c2, t3)
+    c4 = +(c3, t4)
+    c5 = +(c4, t5)
+    c6 = +(c5, t6)
+    return -(code, c6)
+endfunc
+
+func keep(item)%
+    return item
+endfunc
+
+func inc(item)%
+    return +(item, 1)
+endfunc
+
+func zero(item)%
+    return 0
+endfunc
+
+func blank(item)%
+    return []
+endfunc
+
+func four(item)%
+    return "FOUR"
+endfunc
+
+func wrap(item)%
+    return +(item, [])
+endfunc
+
+func nest(item)%
+    return +([], +(item, []))
+endfunc
+"""
+
+
+def _four() -> RRE_LIST:
+    return RRE_LIST(tuple(RRE_INT(ord(c)) for c in "FOUR"))
+
+
+def _modulate_expected(pairs: list[tuple[int, int]]) -> RRE_LIST:
+    items: list[Any] = []
+    for code, item in pairs:
+        if code == 0:
+            items.append(RRE_INT(item))
+        elif code == 1:
+            items.append(RRE_INT(item + 1))
+        elif code == 2:
+            items.append(RRE_INT(0))
+        elif code == 3:
+            items.append(RRE_LIST(()))
+        elif code == 4:
+            items.append(_four())
+        elif code == 5:
+            items.append(RRE_LIST((RRE_INT(item),)))
+        elif code == 6:
+            items.append(RRE_LIST((RRE_LIST((RRE_INT(item),)),)))
+        else:
+            raise ValueError(f"unexpected modulator {code}")
+    return RRE_LIST(tuple(items))
+
+
+@pytest.mark.parametrize(
+    "mods, data",
+    [
+        ([], []),
+        ([0], [7]),
+        ([1], [-2]),
+        ([2], [9]),
+        ([3], [4]),
+        ([4], [1]),
+        ([5], [-3]),
+        ([6], [2]),
+        ([0, 1, 2, 3, 4, 5, 6], [10, 20, 30, 40, 50, 60, 70]),
+        ([1, 5, 0, 6], [-1, 0, 8, 3]),
+    ],
+)
+def test_modulate(mods: list[int], data: list[int]) -> None:
+    result = run_program(
+        MODULATE,
+        inputs=[_int_list(mods), _int_list(data)],
+        max_steps=10000,
+        to_dump_history=False,
+    )
+    assert result == _modulate_expected(list(zip(mods, data)))
