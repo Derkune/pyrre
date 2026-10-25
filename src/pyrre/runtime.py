@@ -35,6 +35,21 @@ def wrap_with_runtime_exception(func):
 
 
 @wrap_with_runtime_exception
+def call_should_be_thunk() -> bool:
+    if caller_func_is_primitve:
+        if caller_op_is_condition and caller_arg_is_second:
+            return True
+        return False
+
+    if lazy_mod_present_in_caller:
+        if is_caller_main:
+            raise RuntimeErrorException("main cannot output lazily1")
+        return True
+    
+    return False
+
+
+@wrap_with_runtime_exception
 def find_main(function_names: Iterable[funcname]) -> funcname:
     for name in function_names:
         if name.lower() == "main":

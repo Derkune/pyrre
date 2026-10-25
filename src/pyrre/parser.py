@@ -202,6 +202,15 @@ class Parser:
         return BindingLine(constname, self._parse_expression())
 
 
+def _check_main_is_not_lazy(program: Program) -> None:
+    main = _find_main(program)
+    assert main is not None
+    main_func = program.functions[main]
+
+    if FUNC_MODS.NON_EAGER in main_func.modifiers:
+        raise ParserErrorException("main can't be lazy")
+
+
 def _check_ommitted_params_come_last(program_part: Program | Expr) -> None:
     if isinstance(program_part, Program):
         for func in program_part.functions.values():
@@ -303,10 +312,17 @@ def _check_unique_func_names_and_starting_letters(program: Program) -> None:
         starting_letters.add(func.name[0].lower())
 
 
-def _check_there_is_main(program: Program) -> None:
+def _find_main(program: Program) -> None | str:
     for func in program.functions.values():
         if func.name.lower() == "main":
-            return
+            return func.name
+
+    return None
+
+
+def _check_there_is_main(program: Program) -> None:
+    if _find_main(program) is not None:
+        return
 
     raise ParserErrorException("No main fnction among definitions")
 
@@ -318,6 +334,7 @@ def _post_parse_correctness(program: Program) -> Program:
     _check_unique_exprs(program)
     _check_references_existing_binds(program)
     _check_ommitted_params_come_last(program)
+    _check_main_is_not_lazy(program)
     return program
 
 

@@ -204,12 +204,12 @@ def test_comparisons_lists() -> None:
 
 def test_function_modifiers_and_distinct_letters() -> None:
     code = """
-    func main()!@#%
+    func main()!@#
         res = alpha(10, 20)
         return beta(res)
     endfunc
 
-    func alpha(a, b)#!
+    func alpha(a, b)#!%
         return +(a, b)
     endfunc
 
