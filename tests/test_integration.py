@@ -764,10 +764,9 @@ def test_choice_truthy_does_not_evaluate_second_arg_expressions() -> None:
 
 
 def test_choice_error_does_not_enter_second_arg() -> None:
-    # TODO: adapt to new operation edge case handling
     code = """
     func main()
-        bad = -(0, [])
+        bad = ~("choice error")
         return ?(bad, bomb())
     endfunc
 
@@ -775,9 +774,7 @@ def test_choice_error_does_not_enter_second_arg() -> None:
         return bomb()
     endfunc
     """
-    result = run_program(code)
-    assert isinstance(result, RRE_ERROR)
-    assert result.msg == "val1 is out of bounds"
+    assert run_program(code) == RRE_ERROR("choice error")
 
 
 def test_eager_function_forces_lazy_return() -> None:
@@ -828,23 +825,20 @@ def test_eager_return_forces_thunk_inside_list() -> None:
 
 
 def test_eager_return_list_force_infects_on_thunk_error() -> None:
-    # TODO: adapt to new operation edge case handling
     code = """
     func boxer(n)
         return +(+(5, []), lazy(n))
     endfunc
 
     func lazy(n)%
-        return -(0, [])
+        return ~("thunk error")
     endfunc
 
     func main()
         return -(1, boxer(1))
     endfunc
     """
-    result = run_program(code)
-    assert isinstance(result, RRE_ERROR)
-    assert result.msg == "val1 is out of bounds"
+    assert run_program(code) == RRE_ERROR("thunk error")
 
 
 def test_eager_return_wrong_arity_thunk_is_error() -> None:
