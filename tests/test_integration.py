@@ -1,7 +1,36 @@
-from pyrre.types import ProgramStack, RRE_LIST, RRE_INT
+from typing import Any
+
+from pyrre.types import (
+    ProgramStack,
+    RRE_LIST,
+    RRE_INT,
+    ParserErrorException,
+    LexerErrorException,
+)
 from pyrre.lexer import lex
 from pyrre.parser import parse
 from pyrre.runtime import execute_step
+
+import pytest
+
+
+def run_program(
+    code: str,
+    inputs: None | list[Any] = None,
+    max_steps: int = 1000,
+) -> Any:
+    if inputs is None:
+        inputs = []
+    lexed = lex(code)
+    parsed = parse(lexed)
+    stack = ProgramStack(parsed, inputs)
+
+    for _ in range(max_steps):
+        if stack.final_value is not None:
+            return stack.final_value
+        stack = execute_step(stack)
+
+    pytest.fail(f"Execution exceeded max steps ({max_steps}) without returning.")
 
 
 CASE_1: str = """
@@ -23,14 +52,270 @@ endfunc
 
 
 def test_integration_1() -> None:
-    lexed = lex(CASE_1)
-    parsed = parse(lexed)
+    result = run_program(CASE_1)
+    assert result == RRE_LIST((RRE_INT(3), RRE_INT(65), RRE_INT(0)))
 
-    stack = ProgramStack(parsed, [])
-    for _ in range(1000):
-        if stack.final_value is not None:
-            assert stack.final_value == RRE_LIST((RRE_INT(3), RRE_INT(65), RRE_INT(0)))
-            return
-        stack = execute_step(stack)
 
-    assert False
+def test_int_arithmetic_basic() -> None:
+    code = """
+    func main()
+        sum = +(40, 2)
+        diff = -(10, 15)
+        return +(sum, diff)
+    endfunc
+    """
+    assert run_program(code) == RRE_INT(37)
+
+
+def test_int_nested_calls() -> None:
+    code = """
+    func main()
+        return -(+(10, +(20, 30)), 15)
+    endfunc
+    """
+    assert run_program(code) == RRE_INT(45)
+
+
+def test_add_int_to_list_prepend() -> None:
+    code = """
+    func main()
+        list1 = +(65, [])
+        return +(66, list1)
+    endfunc
+    """
+    assert run_program(code) == RRE_LIST((RRE_INT(66), RRE_INT(65)))
+
+
+def test_add_list_to_int_append() -> None:
+    code = """
+    func main()
+        return +("A", 66)
+    endfunc
+    """
+    assert run_program(code) == RRE_LIST((RRE_INT(65), RRE_INT(66)))
+
+
+def test_add_list_to_list_nesting() -> None:
+    code = """
+    func main()
+        return +("A", "B")
+    endfunc
+    """
+    expected = RRE_LIST((RRE_INT(65), RRE_LIST((RRE_INT(66),))))
+    assert run_program(code) == expected
+
+
+def test_sub_int_list_retrieval_and_clamping() -> None:
+    code = """
+    func main()
+        idx0 = -(0, "ABC")
+        idx_clamped_high = -(99, "ABC")
+        neg_idx = -(0, 5)
+        idx_clamped_low = -(neg_idx, "ABC")
+        empty_ret = -(7, [])
+        return +(+(+(+([], empty_ret), idx_clamped_low), idx_clamped_high), idx0)
+    endfunc
+    """
+
+    expected = RRE_LIST((RRE_INT(7), RRE_INT(65), RRE_INT(67), RRE_INT(65)))
+    assert run_program(code) == expected
+
+
+def test_sub_list_int_removal_and_clamping() -> None:
+    code = """
+    func main()
+        mid_removed = -("ABC", 1)
+        clamped_high = -("ABC", 50)
+        neg_idx = -(0, 10)
+        clamped_low = -("ABC", neg_idx)
+        empty_rem = -([], 0)
+        return +(+(+(+([], mid_removed), clamped_high), clamped_low), empty_rem)
+    endfunc
+    """
+    expected = RRE_LIST(
+        (
+            RRE_LIST((RRE_INT(65), RRE_INT(67))),
+            RRE_LIST((RRE_INT(65), RRE_INT(66))),
+            RRE_LIST((RRE_INT(66), RRE_INT(67))),
+            RRE_LIST(()),
+        )
+    )
+    assert run_program(code) == expected
+
+
+def test_sub_list_list_difference() -> None:
+    code = """
+    func main()
+        rem_one = -("ABACA", "A")
+        rem_two = -("ABACA", "AA")
+        rem_none = -("ABACA", [])
+        return +(+(+([], rem_one), rem_two), rem_none)
+    endfunc
+    """
+    rem_one = RRE_LIST((RRE_INT(66), RRE_INT(65), RRE_INT(67), RRE_INT(65)))
+    rem_two = RRE_LIST((RRE_INT(66), RRE_INT(67), RRE_INT(65)))
+    rem_none = RRE_LIST(
+        (RRE_INT(65), RRE_INT(66), RRE_INT(65), RRE_INT(67), RRE_INT(65))
+    )
+
+    expected = RRE_LIST((rem_one, rem_two, rem_none))
+    assert run_program(code) == expected
+
+
+def test_comparisons_integers() -> None:
+    code = """
+    func main()
+        gt = >(5, 3)
+        eq = ≥(4, 4)
+        lt = >(2, 8)
+        return +( +(+([], gt), eq), lt)
+    endfunc
+    """
+    expected = RRE_LIST((RRE_INT(1), RRE_INT(1), RRE_INT(0)))
+    assert run_program(code) == expected
+
+
+def test_comparisons_list_and_int() -> None:
+    code = """
+    func main()
+        list_gt_int = >([], 100)
+        int_gt_list = >(100, [])
+        return +(+([], list_gt_int), int_gt_list)
+    endfunc
+    """
+    expected = RRE_LIST((RRE_INT(1), RRE_INT(0)))
+    assert run_program(code) == expected
+
+
+def test_comparisons_lists() -> None:
+    code = """
+    func main()
+        shorter = >("A", "AA")
+        longer = >("AA", "A")
+        same_gt = >("B", "A")
+        same_lt = >("A", "B")
+        same_eq = >("A", "A")
+        return +(+(+(+(+([], shorter), longer), same_gt), same_lt), same_eq)
+    endfunc
+    """
+    expected = RRE_LIST((RRE_INT(0), RRE_INT(1), RRE_INT(1), RRE_INT(0), RRE_INT(1)))
+    assert run_program(code) == expected
+
+
+def test_function_modifiers_and_distinct_letters() -> None:
+    code = """
+    func main()!@#%
+        res = alpha(10, 20)
+        return beta(res)
+    endfunc
+
+    func alpha(a, b)#!
+        return +(a, b)
+    endfunc
+
+    func beta(v)%
+        return -(v, 5)
+    endfunc
+    """
+    assert run_program(code) == RRE_INT(25)
+
+
+def test_main_with_arguments() -> None:
+    code = """
+    func main(x, y)
+        return +(x, y)
+    endfunc
+    """
+    inputs = [RRE_INT(12), RRE_INT(18)]
+    assert run_program(code, inputs=inputs) == RRE_INT(30)
+
+
+def test_error_function_names_starting_with_same_letter() -> None:
+    code = """
+    func main()
+        return 0
+    endfunc
+
+    func more()
+        return 1
+    endfunc
+    """
+    with pytest.raises(ParserErrorException):
+        run_program(code)
+
+
+def test_error_duplicate_function_name() -> None:
+    code = """
+    func main()
+        return 0
+    endfunc
+
+    func main()
+        return 1
+    endfunc
+    """
+    with pytest.raises(ParserErrorException):
+        run_program(code)
+
+
+def test_error_missing_main_entry_point() -> None:
+    code = """
+    func entry()
+        return 0
+    endfunc
+    """
+    with pytest.raises(ParserErrorException):
+        run_program(code)
+
+
+def test_error_binding_name_collides_with_argument() -> None:
+    code = """
+    func main(arg1)
+        arg1 = 10
+        return arg1
+    endfunc
+    """
+    with pytest.raises(ParserErrorException):
+        run_program(code)
+
+
+def test_error_duplicate_binding_name() -> None:
+    code = """
+    func main()
+        var1 = 10
+        var1 = 20
+        return var1
+    endfunc
+    """
+    with pytest.raises(ParserErrorException):
+        run_program(code)
+
+
+def test_error_binding_referencing_later_binding() -> None:
+    code = """
+    func main()
+        var1 = +(var2, 1)
+        var2 = 5
+        return var1
+    endfunc
+    """
+    with pytest.raises(ParserErrorException):
+        run_program(code)
+
+
+def test_error_invalid_function_modifier_symbol() -> None:
+    # Allowed symbols are only: !@#%
+    code = """
+    func main()^
+        return 0
+    endfunc
+    """
+    with pytest.raises(LexerErrorException):
+        run_program(code)
+
+
+def test_error_invalid_string_character() -> None:
+    # ASCII chars must be between 32 and 126 (e.g. newline / tabs are invalid)
+    code = 'func main()\n    return "\n"\nendfunc'
+    with pytest.raises(ParserErrorException):
+        run_program(code)

@@ -43,10 +43,13 @@ def parse_RRE_string(text: str) -> RRE_LIST:
     chars: list[RRE_VALUE] = []
 
     for char in text:
-        if MIN_CHAR_REPRESENTABLE_INT > ord(char) > MAX_CHAR_REPRESENTABLE_INT:
+        if (
+            MIN_CHAR_REPRESENTABLE_INT > ord(char)
+            or ord(char) > MAX_CHAR_REPRESENTABLE_INT
+        ):
             raise ParserErrorException(f"{char} is not allowed in a RRE string")
 
-        if MIN_INT > ord(char) > MAX_INT:
+        if MIN_INT > ord(char) or ord(char) > MAX_INT:
             raise ParserErrorException(
                 f"{char} is somehow out of the range for integers"
             )
