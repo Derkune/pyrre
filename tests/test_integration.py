@@ -930,3 +930,145 @@ def test_error_constant_rejects_non_string_argument(bad: str) -> None:
     """
     with pytest.raises(ParserErrorException):
         run_program(code)
+
+
+def test_recursion_depth_at_limit_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 2)
+    code = """
+    func main()
+        return leaf()
+    endfunc
+
+    func leaf()
+        return 7
+    endfunc
+    """
+    assert run_program(code) == RRE_INT(7)
+
+
+def test_recursion_depth_exceeded_is_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 2)
+    code = """
+    func main()
+        return rec()
+    endfunc
+
+    func rec()
+        return rec()
+    endfunc
+    """
+    assert run_program(code) == RRE_ERROR("recursion depth")
+
+
+def test_recursion_depth_error_infects_plus(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 2)
+    code = """
+    func main()
+        return +(1, rec())
+    endfunc
+
+    func rec()
+        return rec()
+    endfunc
+    """
+    assert run_program(code) == RRE_ERROR("recursion depth")
+
+
+def test_bindings_do_not_count_as_recursion(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 1)
+    code = """
+    func main()
+        a = 1
+        b = +(a, 1)
+        c = +(b, 1)
+        d = +(c, 1)
+        e = +(d, 1)
+        return e
+    endfunc
+    """
+    assert run_program(code) == RRE_INT(5)
+
+
+def test_expression_and_force_frames_do_not_count_as_recursion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 1)
+    code = """
+    func main()
+        boxed = +([], ?(0, +(1, 2)))
+        return boxed
+    endfunc
+    """
+    assert run_program(code) == RRE_LIST.create((RRE_INT(3),))
+
+
+def test_eager_percent_callee_counts_function_frames(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 1)
+    code = """
+    func lazy(a)%
+        return +(a, 1)
+    endfunc
+
+    func main()
+        return +(0, ?(0, lazy(1)))
+    endfunc
+    """
+    assert run_program(code) == RRE_ERROR("recursion depth")
+
+    monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 2)
+    assert run_program(code) == RRE_INT(2)
+
+
+def test_percent_thunk_not_counted_until_forced(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 1)
+    code = """
+    func lazy(a)%
+        return +(a, 1)
+    endfunc
+
+    func main()
+        t = lazy(1)
+        return 5
+    endfunc
+    """
+    assert run_program(code) == RRE_INT(5)
+
+
+def test_truthy_choice_skips_recursive_call_at_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 2)
+    code = """
+    func rec()
+        return rec()
+    endfunc
+
+    func leaf()
+        return ?(1, rec())
+    endfunc
+
+    func main()
+        return leaf()
+    endfunc
+    """
+    assert run_program(code) == RRE_INT(1)
+
+
+def test_choice_force_of_percent_thunk_counts_function_frame(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 1)
+    code = """
+    func rec()%
+        return rec()
+    endfunc
+
+    func main()
+        return ?(0, rec())
+    endfunc
+    """
+    assert run_program(code) == RRE_ERROR("recursion depth")

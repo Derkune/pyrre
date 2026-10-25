@@ -29,6 +29,9 @@ from pyrre.types import (
     is_truthy,
     Program,
 )
+from pyrre.static_config import MAX_RECURSION_DEPTH
+
+RECURSION_DEPTH_ERROR = RRE_ERROR("recursion depth")
 
 
 def callee_returns_thunk(*, call_func: funcname, stack: ProgramStack) -> bool:
@@ -74,6 +77,17 @@ def construct_function_call_frame(
     return FunctionStackFrame(call.funcname, arg_vals)
 
 
+def function_frame_count(stack: ProgramStack) -> int:
+    return sum(isinstance(frame, FunctionStackFrame) for frame in stack.call_stack)
+
+
+def try_push_function_frame(frame: FunctionStackFrame, stack: ProgramStack) -> bool:
+    if function_frame_count(stack) >= MAX_RECURSION_DEPTH:
+        return False
+    stack.call_stack.append(frame)
+    return True
+
+
 def value_contains_thunk(val: RRE_VALUE) -> bool:
     match val:
         case RRE_THUNK():
@@ -110,13 +124,13 @@ def push_thunk_evaluation(thunk: RRE_THUNK, stack: ProgramStack) -> None:
         return
 
     func = stack.program.functions[thunk.funcname]
-    stack.call_stack.append(
-        construct_function_call_frame(
-            call=Call(thunk.funcname, ()),
-            evaluated_args=list(thunk.arguments),
-            func=func,
-        )
+    frame = construct_function_call_frame(
+        call=Call(thunk.funcname, ()),
+        evaluated_args=list(thunk.arguments),
+        func=func,
     )
+    if not try_push_function_frame(frame, stack):
+        complete_force_frame(RECURSION_DEPTH_ERROR, stack)
 
 
 def set_program_result(val: RRE_VALUE, stack: ProgramStack) -> None:
@@ -228,13 +242,13 @@ def schedule_forced_thunk(thunk: RRE_THUNK, stack: ProgramStack) -> None:
         return
 
     func = stack.program.functions[thunk.funcname]
-    stack.call_stack.append(
-        construct_function_call_frame(
-            call=Call(thunk.funcname, ()),
-            evaluated_args=list(thunk.arguments),
-            func=func,
-        )
+    frame = construct_function_call_frame(
+        call=Call(thunk.funcname, ()),
+        evaluated_args=list(thunk.arguments),
+        func=func,
     )
+    if not try_push_function_frame(frame, stack):
+        handle_value_from_top_of_stack(RECURSION_DEPTH_ERROR, stack)
 
 
 def response_if_op_args_evaluated(
@@ -300,11 +314,11 @@ def response_if_func_call_parameters_evaluated(
     stack: ProgramStack,
 ) -> Callable[[], None]:
     def response() -> None:
-        stack.call_stack.append(
-            construct_function_call_frame(
-                call=call, evaluated_args=evaluated_args, func=func
-            )
+        frame = construct_function_call_frame(
+            call=call, evaluated_args=evaluated_args, func=func
         )
+        if not try_push_function_frame(frame, stack):
+            handle_value_from_top_of_stack(RECURSION_DEPTH_ERROR, stack)
 
     return response
 
@@ -436,7 +450,9 @@ def execute_step(stack: ProgramStack) -> ProgramStack:
     stack = stack.copy_stack()
 
     if not stack.call_stack:
-        stack.call_stack.append(construct_point_of_entry_frame(stack))
+        if not try_push_function_frame(construct_point_of_entry_frame(stack), stack):
+            set_program_result(RECURSION_DEPTH_ERROR, stack)
+            return stack
 
     top_frame = stack.call_stack[-1]
 
