@@ -38,7 +38,7 @@ def wrap_with_runtime_exception(func):
 
 @wrap_with_runtime_exception
 def call_should_be_thunk(
-    caller_func: funcname, caller_arg_idx: int, stack: ProgramStack
+    *, caller_func: funcname, caller_arg_idx: int, stack: ProgramStack
 ) -> bool:
     if caller_func in PRIMITIVE_OPS:
         if caller_func == "?" and caller_arg_idx == 1:
@@ -79,7 +79,7 @@ def construct_point_of_entry_frame(stack: ProgramStack) -> FunctionStackFrame:
 
 @wrap_with_runtime_exception
 def construct_function_call_frame(
-    call: Call, evaluated_args: list[RRE_VALUE], func: FunctionDef
+    *, call: Call, evaluated_args: list[RRE_VALUE], func: FunctionDef
 ) -> FunctionStackFrame:
     arg_vals: dict[str, RRE_VALUE] = {}
     for val, name in zip(evaluated_args, func.param_names, strict=True):
@@ -123,7 +123,7 @@ def handle_value_from_return_of_function(val: RRE_VALUE, stack: ProgramStack) ->
 
 @wrap_with_runtime_exception
 def response_if_op_args_evaluated(
-    funcname: funcname, evaluated_args: list[RRE_VALUE], stack: ProgramStack
+    *, funcname: funcname, evaluated_args: list[RRE_VALUE], stack: ProgramStack
 ) -> Callable[[], None]:
     def response() -> None:
         func = PRIMITIVE_OPS[funcname]
@@ -142,6 +142,7 @@ def response_if_op_args_evaluated(
 
 @wrap_with_runtime_exception
 def handle_func_call(
+    *,
     call: Call,
     evaluated_args: list[RRE_VALUE],
     caller_func: funcname,
@@ -166,11 +167,17 @@ def handle_func_call(
 
 @wrap_with_runtime_exception
 def response_if_func_call_parameters_evaluated(
-    call: Call, evaluated_args: list[RRE_VALUE], func: FunctionDef, stack: ProgramStack
+    *,
+    call: Call,
+    evaluated_args: list[RRE_VALUE],
+    func: FunctionDef,
+    stack: ProgramStack,
 ) -> Callable[[], None]:
     def response() -> None:
         stack.call_stack.append(
-            construct_function_call_frame(call, evaluated_args, func)
+            construct_function_call_frame(
+                call=call, evaluated_args=evaluated_args, func=func
+            )
         )
 
     return response
@@ -187,7 +194,7 @@ def get_func_expected_number_of_args(funcname: funcname, stack: ProgramStack) ->
 
 @wrap_with_runtime_exception
 def response_if_call_should_be_thunk(
-    call: Call, evaluated_args: list[RRE_VALUE], stack: ProgramStack
+    *, call: Call, evaluated_args: list[RRE_VALUE], stack: ProgramStack
 ) -> Callable[[], None]:
     def response() -> None:
         val = RRE_THUNK(call.funcname, tuple(evaluated_args))
@@ -204,46 +211,61 @@ def process_expression_frame(frame: ExpressionStackFrame, stack: ProgramStack) -
     elif isinstance(frame.expr, get_args(RRE_VALUE)):
         handle_value_from_top_of_stack(cast(RRE_VALUE, frame.expr), stack)
     elif isinstance(frame.expr, Call):
-        if call_should_be_thunk(frame.caller_func, len(frame.evaluated_args), stack):
+        if call_should_be_thunk(
+            caller_func=frame.caller_func,
+            caller_arg_idx=len(frame.evaluated_args),
+            stack=stack,
+        ):
             handle_func_call(
-                frame.expr,
-                frame.evaluated_args,
-                frame.caller_func,
-                frame.bindings,
-                get_func_expected_number_of_args(frame.expr.funcname, stack),
-                response_if_call_should_be_thunk(
-                    frame.expr, frame.evaluated_args, stack
+                call=frame.expr,
+                evaluated_args=frame.evaluated_args,
+                caller_func=frame.caller_func,
+                bindings=frame.bindings,
+                expected_number_of_args=get_func_expected_number_of_args(
+                    frame.expr.funcname, stack
                 ),
-                stack,
+                response_if_args_evaluated=response_if_call_should_be_thunk(
+                    call=frame.expr, evaluated_args=frame.evaluated_args, stack=stack
+                ),
+                stack=stack,
             )
             return
 
         if frame.expr.funcname in PRIMITIVE_OPS:
             handle_func_call(
-                frame.expr,
-                frame.evaluated_args,
-                frame.caller_func,
-                frame.bindings,
-                get_func_expected_number_of_args(frame.expr.funcname, stack),
-                response_if_op_args_evaluated(
-                    frame.expr.funcname, frame.evaluated_args, stack
+                call=frame.expr,
+                evaluated_args=frame.evaluated_args,
+                caller_func=frame.caller_func,
+                bindings=frame.bindings,
+                expected_number_of_args=get_func_expected_number_of_args(
+                    frame.expr.funcname, stack
                 ),
-                stack,
+                response_if_args_evaluated=response_if_op_args_evaluated(
+                    funcname=frame.expr.funcname,
+                    evaluated_args=frame.evaluated_args,
+                    stack=stack,
+                ),
+                stack=stack,
             )
             return
 
         func = stack.program.functions[frame.expr.funcname]
 
         handle_func_call(
-            frame.expr,
-            frame.evaluated_args,
-            frame.caller_func,
-            frame.bindings,
-            get_func_expected_number_of_args(frame.expr.funcname, stack),
-            response_if_func_call_parameters_evaluated(
-                frame.expr, frame.evaluated_args, func, stack
+            call=frame.expr,
+            evaluated_args=frame.evaluated_args,
+            caller_func=frame.caller_func,
+            bindings=frame.bindings,
+            expected_number_of_args=get_func_expected_number_of_args(
+                frame.expr.funcname, stack
             ),
-            stack,
+            response_if_args_evaluated=response_if_func_call_parameters_evaluated(
+                call=frame.expr,
+                evaluated_args=frame.evaluated_args,
+                func=func,
+                stack=stack,
+            ),
+            stack=stack,
         )
     else:
         raise RuntimeErrorException(
