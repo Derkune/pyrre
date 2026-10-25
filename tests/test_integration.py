@@ -72,7 +72,7 @@ endfunc
 
 def test_integration_1() -> None:
     result = run_program(CASE_1)
-    assert result == RRE_LIST((RRE_INT(3), RRE_INT(65), RRE_INT(0)))
+    assert result == RRE_LIST.create((RRE_INT(3), RRE_INT(65), RRE_INT(0)))
 
 
 def test_int_arithmetic_basic() -> None:
@@ -102,7 +102,7 @@ def test_add_int_to_list_prepend() -> None:
         return +(66, list1)
     endfunc
     """
-    assert run_program(code) == RRE_LIST((RRE_INT(66), RRE_INT(65)))
+    assert run_program(code) == RRE_LIST.create((RRE_INT(66), RRE_INT(65)))
 
 
 def test_add_list_to_int_append() -> None:
@@ -111,7 +111,7 @@ def test_add_list_to_int_append() -> None:
         return +("A", 66)
     endfunc
     """
-    assert run_program(code) == RRE_LIST((RRE_INT(65), RRE_INT(66)))
+    assert run_program(code) == RRE_LIST.create((RRE_INT(65), RRE_INT(66)))
 
 
 def test_add_list_to_list_nesting() -> None:
@@ -120,7 +120,7 @@ def test_add_list_to_list_nesting() -> None:
         return +("A", "B")
     endfunc
     """
-    expected = RRE_LIST((RRE_INT(65), RRE_LIST((RRE_INT(66),))))
+    expected = RRE_LIST.create((RRE_INT(65), RRE_LIST.create((RRE_INT(66),))))
     assert run_program(code) == expected
 
 
@@ -135,7 +135,7 @@ def test_sub_int_list_retrieval_and_clamping() -> None:
     endfunc
     """
 
-    expected = RRE_LIST((RRE_INT(65), RRE_INT(67), RRE_INT(65)))
+    expected = RRE_LIST.create((RRE_INT(65), RRE_INT(67), RRE_INT(65)))
     assert run_program(code) == expected
 
 
@@ -149,11 +149,11 @@ def test_sub_list_int_removal_and_clamping() -> None:
         return +(+(+([], mid_removed), clamped_high), clamped_low)
     endfunc
     """
-    expected = RRE_LIST(
+    expected = RRE_LIST.create(
         (
-            RRE_LIST((RRE_INT(65), RRE_INT(67))),
-            RRE_LIST((RRE_INT(65), RRE_INT(66))),
-            RRE_LIST((RRE_INT(66), RRE_INT(67))),
+            RRE_LIST.create((RRE_INT(65), RRE_INT(67))),
+            RRE_LIST.create((RRE_INT(65), RRE_INT(66))),
+            RRE_LIST.create((RRE_INT(66), RRE_INT(67))),
         )
     )
     assert run_program(code) == expected
@@ -168,13 +168,13 @@ def test_sub_list_list_difference() -> None:
         return +(+(+([], rem_one), rem_two), rem_none)
     endfunc
     """
-    rem_one = RRE_LIST((RRE_INT(66), RRE_INT(65), RRE_INT(67), RRE_INT(65)))
-    rem_two = RRE_LIST((RRE_INT(66), RRE_INT(67), RRE_INT(65)))
-    rem_none = RRE_LIST(
+    rem_one = RRE_LIST.create((RRE_INT(66), RRE_INT(65), RRE_INT(67), RRE_INT(65)))
+    rem_two = RRE_LIST.create((RRE_INT(66), RRE_INT(67), RRE_INT(65)))
+    rem_none = RRE_LIST.create(
         (RRE_INT(65), RRE_INT(66), RRE_INT(65), RRE_INT(67), RRE_INT(65))
     )
 
-    expected = RRE_LIST((rem_one, rem_two, rem_none))
+    expected = RRE_LIST.create((rem_one, rem_two, rem_none))
     assert run_program(code) == expected
 
 
@@ -187,7 +187,7 @@ def test_comparisons_integers() -> None:
         return +( +(+([], gt), eq), lt)
     endfunc
     """
-    expected = RRE_LIST((RRE_INT(1), RRE_INT(1), RRE_INT(0)))
+    expected = RRE_LIST.create((RRE_INT(1), RRE_INT(1), RRE_INT(0)))
     assert run_program(code) == expected
 
 
@@ -199,7 +199,7 @@ def test_comparisons_list_and_int() -> None:
         return +(+([], list_gt_int), int_gt_list)
     endfunc
     """
-    expected = RRE_LIST((RRE_INT(1), RRE_INT(0)))
+    expected = RRE_LIST.create((RRE_INT(1), RRE_INT(0)))
     assert run_program(code) == expected
 
 
@@ -214,7 +214,9 @@ def test_comparisons_lists() -> None:
         return +(+(+(+(+([], shorter), longer), same_gt), same_lt), same_eq)
     endfunc
     """
-    expected = RRE_LIST((RRE_INT(0), RRE_INT(1), RRE_INT(1), RRE_INT(0), RRE_INT(1)))
+    expected = RRE_LIST.create(
+        (RRE_INT(0), RRE_INT(1), RRE_INT(1), RRE_INT(0), RRE_INT(1))
+    )
     assert run_program(code) == expected
 
 
@@ -430,7 +432,7 @@ def test_sub_clamps_below_min_int() -> None:
 
 def test_max_length_string_literal_accepted() -> None:
     code = 'func main()\n    return "ABCDEFGHIJKLMNOP"\nendfunc'
-    expected = RRE_LIST(tuple(RRE_INT(ord(c)) for c in "ABCDEFGHIJKLMNOP"))
+    expected = RRE_LIST.create(tuple(RRE_INT(ord(c)) for c in "ABCDEFGHIJKLMNOP"))
     assert run_program(code) == expected
 
 
@@ -447,7 +449,7 @@ def test_append_to_max_length_list_is_noop() -> None:
         return +(full, 81)
     endfunc
     """
-    expected = RRE_LIST(tuple(RRE_INT(ord(c)) for c in "ABCDEFGHIJKLMNOP"))
+    expected = RRE_LIST.create(tuple(RRE_INT(ord(c)) for c in "ABCDEFGHIJKLMNOP"))
     assert run_program(code) == expected
 
 
@@ -458,7 +460,7 @@ def test_prepend_to_max_length_list_is_noop() -> None:
         return +(81, full)
     endfunc
     """
-    expected = RRE_LIST(tuple(RRE_INT(ord(c)) for c in "ABCDEFGHIJKLMNOP"))
+    expected = RRE_LIST.create(tuple(RRE_INT(ord(c)) for c in "ABCDEFGHIJKLMNOP"))
     assert run_program(code) == expected
 
 
@@ -468,7 +470,7 @@ def test_append_to_near_max_length_list_grows() -> None:
         return +("ABCDEFGHIJKLMNO", 80)
     endfunc
     """
-    expected = RRE_LIST(tuple(RRE_INT(ord(c)) for c in "ABCDEFGHIJKLMNOP"))
+    expected = RRE_LIST.create(tuple(RRE_INT(ord(c)) for c in "ABCDEFGHIJKLMNOP"))
     assert run_program(code) == expected
 
 
@@ -479,7 +481,7 @@ def test_add_list_to_max_length_list_is_noop() -> None:
         return +(full, "A")
     endfunc
     """
-    expected = RRE_LIST(tuple(RRE_INT(ord(c)) for c in "ABCDEFGHIJKLMNOP"))
+    expected = RRE_LIST.create(tuple(RRE_INT(ord(c)) for c in "ABCDEFGHIJKLMNOP"))
     assert run_program(code) == expected
 
 
@@ -497,7 +499,7 @@ def test_nesting_at_max_depth_then_wrap_is_noop() -> None:
         return +([], d8)
     endfunc
     """
-    assert run_program(code) == RRE_LIST(())
+    assert run_program(code) == RRE_LIST.create(())
 
 
 def test_thunk_append_and_prepend_at_max_length_are_noops() -> None:
@@ -531,35 +533,35 @@ def test_thunk_append_and_prepend_at_max_length_are_noops() -> None:
         return +(+( [], last_after_append), first_after_prepend)
     endfunc
     """
-    assert run_program(code) == RRE_LIST((RRE_INT(1), RRE_INT(1)))
+    assert run_program(code) == RRE_LIST.create((RRE_INT(1), RRE_INT(1)))
 
 
 def test_overlong_list_construction_raises() -> None:
     items = tuple(RRE_INT(0) for _ in range(MAX_LIST_LENGTH + 1))
     with pytest.raises(RuntimeErrorException):
-        RRE_LIST(items)
+        RRE_LIST.create(items)
 
 
 def test_overdeep_list_construction_raises() -> None:
-    nested: RRE_LIST = RRE_LIST(())
+    nested: RRE_LIST = RRE_LIST.create(())
     for _ in range(MAX_LIST_NESTING_DEPTH - 1):
-        nested = RRE_LIST((nested,))
+        nested = RRE_LIST.create((nested,))
     with pytest.raises(RuntimeErrorException):
-        RRE_LIST((nested,))
+        RRE_LIST.create((nested,))
 
 
 def test_overdeep_thunk_construction_raises() -> None:
-    nested: RRE_LIST = RRE_LIST(())
+    nested: RRE_LIST = RRE_LIST.create(())
     for _ in range(MAX_LIST_NESTING_DEPTH - 1):
-        nested = RRE_LIST((nested,))
+        nested = RRE_LIST.create((nested,))
     with pytest.raises(RuntimeErrorException):
-        RRE_THUNK("f", (nested,))
+        RRE_THUNK.create("f", (nested,))
 
 
 def test_overlong_thunk_construction_raises() -> None:
     items = tuple(RRE_INT(0) for _ in range(MAX_LIST_LENGTH + 1))
     with pytest.raises(RuntimeErrorException):
-        RRE_THUNK("f", items)
+        RRE_THUNK.create("f", items)
 
 
 def test_max_args_params_and_call_accepted() -> None:
@@ -675,7 +677,7 @@ def test_choice_falsy_returns_non_call_second_arg() -> None:
         return +(+([], int_branch), empty_branch)
     endfunc
     """
-    expected = RRE_LIST((RRE_INT(5), RRE_LIST(())))
+    expected = RRE_LIST.create((RRE_INT(5), RRE_LIST.create(())))
     assert run_program(code) == expected
 
 
@@ -821,7 +823,7 @@ def test_eager_return_forces_thunk_inside_list() -> None:
         return +(a, 2)
     endfunc
     """
-    assert run_program(code) == RRE_LIST((RRE_INT(3),))
+    assert run_program(code) == RRE_LIST.create((RRE_INT(3),))
 
 
 def test_eager_return_list_force_infects_on_thunk_error() -> None:

@@ -137,7 +137,7 @@ endfunc
 
 
 def _int_list(values: list[int]) -> RRE_LIST:
-    return RRE_LIST(tuple(RRE_INT(v) for v in values))
+    return RRE_LIST.create(tuple(RRE_INT(v) for v in values))
 
 
 @pytest.mark.parametrize(
@@ -329,7 +329,7 @@ endfunc
 
 
 def _four() -> RRE_LIST:
-    return RRE_LIST(tuple(RRE_INT(ord(c)) for c in "FOUR"))
+    return RRE_LIST.create(tuple(RRE_INT(ord(c)) for c in "FOUR"))
 
 
 def _modulate_expected(pairs: list[tuple[int, int]]) -> RRE_LIST:
@@ -342,16 +342,16 @@ def _modulate_expected(pairs: list[tuple[int, int]]) -> RRE_LIST:
         elif code == 2:
             items.append(RRE_INT(0))
         elif code == 3:
-            items.append(RRE_LIST(()))
+            items.append(RRE_LIST.create(()))
         elif code == 4:
             items.append(_four())
         elif code == 5:
-            items.append(RRE_LIST((RRE_INT(item),)))
+            items.append(RRE_LIST.create((RRE_INT(item),)))
         elif code == 6:
-            items.append(RRE_LIST((RRE_LIST((RRE_INT(item),)),)))
+            items.append(RRE_LIST.create((RRE_LIST.create((RRE_INT(item),)),)))
         else:
             raise ValueError(f"unexpected modulator {code}")
-    return RRE_LIST(tuple(items))
+    return RRE_LIST.create(tuple(items))
 
 
 @pytest.mark.parametrize(

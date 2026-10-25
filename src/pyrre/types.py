@@ -175,20 +175,24 @@ def _sequence_depth_within_limits(items: immutable_list[RRE_VALUE]) -> int:
 @dataclass(frozen=True)
 class RRE_LIST:
     value: immutable_list[RRE_VALUE]
-    depth: int = field(init=False)
+    depth: int
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "depth", _sequence_depth_within_limits(self.value))
+    @classmethod
+    def create(cls, value: immutable_list[RRE_VALUE]) -> RRE_LIST:
+        return cls(value, _sequence_depth_within_limits(value))
 
 
 @dataclass(frozen=True)
 class RRE_THUNK:
     funcname: funcname
     arguments: immutable_list[RRE_VALUE]
-    depth: int = field(init=False)
+    depth: int
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "depth", _sequence_depth_within_limits(self.arguments))
+    @classmethod
+    def create(
+        cls, funcname: funcname, arguments: immutable_list[RRE_VALUE]
+    ) -> RRE_THUNK:
+        return cls(funcname, arguments, _sequence_depth_within_limits(arguments))
 
 
 @dataclass(frozen=True)
@@ -273,16 +277,16 @@ def _plus_list(container: RRE_LIST, item: RRE_VALUE, *, prepend: bool) -> RRE_LI
     if _plus_exceeds_limits(len(container.value), container.depth, item):
         return container
     if prepend:
-        return RRE_LIST(tuple([item]) + container.value)
-    return RRE_LIST(container.value + tuple([item]))
+        return RRE_LIST.create(tuple([item]) + container.value)
+    return RRE_LIST.create(container.value + tuple([item]))
 
 
 def _plus_thunk(container: RRE_THUNK, item: RRE_VALUE, *, prepend: bool) -> RRE_THUNK:
     if _plus_exceeds_limits(len(container.arguments), container.depth, item):
         return container
     if prepend:
-        return RRE_THUNK(container.funcname, tuple([item]) + container.arguments)
-    return RRE_THUNK(container.funcname, container.arguments + tuple([item]))
+        return RRE_THUNK.create(container.funcname, tuple([item]) + container.arguments)
+    return RRE_THUNK.create(container.funcname, container.arguments + tuple([item]))
 
 
 def RRE_PLUS(val1: RRE_VALUE, val2: RRE_VALUE, _: FunctionMappingView) -> RRE_VALUE:
@@ -455,11 +459,13 @@ def RRE_MINUS(
 
             lst = list(val1.value)
             lst.pop(lst_idx)
-            return RRE_LIST(tuple(lst))
+            return RRE_LIST.create(tuple(lst))
         case RRE_LIST(), RRE_LIST():
-            return RRE_LIST(list_difference(val1.value, val2.value, functions))
+            return RRE_LIST.create(list_difference(val1.value, val2.value, functions))
         case RRE_LIST(), RRE_THUNK():
-            return RRE_LIST(list_difference(val1.value, val2.arguments, functions))
+            return RRE_LIST.create(
+                list_difference(val1.value, val2.arguments, functions)
+            )
         case RRE_LIST(), RRE_ERROR():
             return val2
         #
@@ -470,13 +476,13 @@ def RRE_MINUS(
 
             lst = list(val1.arguments)
             lst.pop(lst_idx)
-            return RRE_THUNK(val1.funcname, tuple(lst))
+            return RRE_THUNK.create(val1.funcname, tuple(lst))
         case RRE_THUNK(), RRE_LIST():
-            return RRE_THUNK(
+            return RRE_THUNK.create(
                 val1.funcname, list_difference(val1.arguments, val2.value, functions)
             )
         case RRE_THUNK(), RRE_THUNK():
-            return RRE_THUNK(
+            return RRE_THUNK.create(
                 val1.funcname,
                 list_difference(val1.arguments, val2.arguments, functions),
             )

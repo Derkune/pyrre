@@ -321,7 +321,7 @@ def response_if_call_should_be_thunk(
     *, call: Call, evaluated_args: list[RRE_VALUE], stack: ProgramStack
 ) -> Callable[[], None]:
     def response() -> None:
-        val = RRE_THUNK(call.funcname, tuple(evaluated_args))
+        val = RRE_THUNK.create(call.funcname, tuple(evaluated_args))
         handle_value_from_top_of_stack(val, stack)
 
     return response
@@ -426,7 +426,7 @@ def process_force_frame(frame: ForceFrame, stack: ProgramStack) -> None:
             return
         frame.forced_items.append(item)
 
-    complete_force_frame(RRE_LIST(tuple(frame.forced_items)), stack)
+    complete_force_frame(RRE_LIST.create(tuple(frame.forced_items)), stack)
 
 
 def execute_step(stack: ProgramStack) -> ProgramStack:

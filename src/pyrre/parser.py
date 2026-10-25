@@ -61,7 +61,7 @@ def parse_RRE_string(text: str) -> RRE_LIST:
     if len(chars) > MAX_LIST_LENGTH:
         raise ParserErrorException("string is too long")
 
-    return RRE_LIST(tuple(chars))
+    return RRE_LIST.create(tuple(chars))
 
 
 class Parser:
@@ -169,7 +169,7 @@ class Parser:
                 return RRE_INT(val)
             case TokenType.CONSTEMPTYLST:
                 self.match(TokenType.CONSTEMPTYLST)
-                return RRE_LIST(tuple())
+                return RRE_LIST.create(tuple())
             case TokenType.CONSTSTR:
                 self.match(TokenType.CONSTSTR)
                 return parse_RRE_string(text)
