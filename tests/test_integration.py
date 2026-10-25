@@ -8,10 +8,14 @@ from pyrre.types import (
     RuntimeErrorException,
     Token,
     TokenType,
+    FunctionStackFrame,
+    ProgramStack,
 )
 from pyrre.static_config import MAX_LIST_LENGTH, MAX_LIST_NESTING_DEPTH
 from pyrre.parser import parse
-from rre_testutil import run_program
+from pyrre.lexer import lex
+from pyrre.runtime import execute_step
+from rre_testutil import run_program, apply_memoize_modifier
 
 import pytest
 
@@ -70,7 +74,9 @@ def test_add_int_to_list_prepend(memoize: bool) -> None:
         return +(66, list1)
     endfunc
     """
-    assert run_program(code, memoize=memoize) == RRE_LIST.create((RRE_INT(66), RRE_INT(65)))
+    assert run_program(code, memoize=memoize) == RRE_LIST.create(
+        (RRE_INT(66), RRE_INT(65))
+    )
 
 
 @pytest.mark.parametrize("memoize", [False, True])
@@ -80,7 +86,9 @@ def test_add_list_to_int_append(memoize: bool) -> None:
         return +("A", 66)
     endfunc
     """
-    assert run_program(code, memoize=memoize) == RRE_LIST.create((RRE_INT(65), RRE_INT(66)))
+    assert run_program(code, memoize=memoize) == RRE_LIST.create(
+        (RRE_INT(65), RRE_INT(66))
+    )
 
 
 @pytest.mark.parametrize("memoize", [False, True])
@@ -524,7 +532,9 @@ def test_thunk_append_and_prepend_at_max_length_are_noops(memoize: bool) -> None
         return +(+( [], last_after_append), first_after_prepend)
     endfunc
     """
-    assert run_program(code, memoize=memoize) == RRE_LIST.create((RRE_INT(1), RRE_INT(1)))
+    assert run_program(code, memoize=memoize) == RRE_LIST.create(
+        (RRE_INT(1), RRE_INT(1))
+    )
 
 
 def test_overlong_list_construction_raises() -> None:
@@ -947,7 +957,9 @@ def test_error_constant_rejects_non_string_argument(bad: str) -> None:
 
 
 @pytest.mark.parametrize("memoize", [False, True])
-def test_recursion_depth_at_limit_succeeds(monkeypatch: pytest.MonkeyPatch, memoize: bool) -> None:
+def test_recursion_depth_at_limit_succeeds(
+    monkeypatch: pytest.MonkeyPatch, memoize: bool
+) -> None:
     monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 2)
     code = """
     func main()
@@ -962,7 +974,9 @@ def test_recursion_depth_at_limit_succeeds(monkeypatch: pytest.MonkeyPatch, memo
 
 
 @pytest.mark.parametrize("memoize", [False, True])
-def test_recursion_depth_exceeded_is_error(monkeypatch: pytest.MonkeyPatch, memoize: bool) -> None:
+def test_recursion_depth_exceeded_is_error(
+    monkeypatch: pytest.MonkeyPatch, memoize: bool
+) -> None:
     monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 2)
     code = """
     func main()
@@ -977,7 +991,9 @@ def test_recursion_depth_exceeded_is_error(monkeypatch: pytest.MonkeyPatch, memo
 
 
 @pytest.mark.parametrize("memoize", [False, True])
-def test_recursion_depth_error_infects_plus(monkeypatch: pytest.MonkeyPatch, memoize: bool) -> None:
+def test_recursion_depth_error_infects_plus(
+    monkeypatch: pytest.MonkeyPatch, memoize: bool
+) -> None:
     monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 2)
     code = """
     func main()
@@ -992,7 +1008,9 @@ def test_recursion_depth_error_infects_plus(monkeypatch: pytest.MonkeyPatch, mem
 
 
 @pytest.mark.parametrize("memoize", [False, True])
-def test_bindings_do_not_count_as_recursion(monkeypatch: pytest.MonkeyPatch, memoize: bool) -> None:
+def test_bindings_do_not_count_as_recursion(
+    monkeypatch: pytest.MonkeyPatch, memoize: bool
+) -> None:
     monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 1)
     code = """
     func main()
@@ -1095,3 +1113,76 @@ def test_choice_force_of_percent_thunk_counts_function_frame(
     endfunc
     """
     assert run_program(code, memoize=memoize) == RRE_ERROR("recursion depth")
+
+
+def test_tail_self_call_in_binding_is_parse_error() -> None:
+    code = """
+    func main()
+        return rec()
+    endfunc
+
+    func rec()@
+        x = rec()
+        return x
+    endfunc
+    """
+    with pytest.raises(ParserErrorException, match="tail-recursive call"):
+        run_program(code)
+
+
+def test_tail_self_call_in_plus_is_parse_error() -> None:
+    code = """
+    func main()
+        return rec()
+    endfunc
+
+    func rec()@
+        return +(1, rec())
+    endfunc
+    """
+    with pytest.raises(ParserErrorException, match="tail-recursive call"):
+        run_program(code)
+
+
+def test_tail_self_call_in_choice_condition_is_parse_error() -> None:
+    code = """
+    func main()
+        return rec()
+    endfunc
+
+    func rec()@
+        return ?(rec(), 0)
+    endfunc
+    """
+    with pytest.raises(ParserErrorException, match="tail-recursive call"):
+        run_program(code)
+
+
+@pytest.mark.parametrize("memoize", [False, True])
+def test_direct_tail_call_does_not_grow_depth(
+    monkeypatch: pytest.MonkeyPatch, memoize: bool
+) -> None:
+    monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 2)
+    code = """
+    func rec()@
+        return rec()
+    endfunc
+
+    func main()
+        return rec()
+    endfunc
+    """
+    if memoize:
+        code = apply_memoize_modifier(code)
+    stack = ProgramStack(parse(lex(code)), [])
+    for _ in range(200):
+        stack = execute_step(stack)
+        func_frames = sum(
+            isinstance(frame, FunctionStackFrame) for frame in stack.call_stack
+        )
+        assert func_frames <= 2
+        if stack.final_value is not None:
+            assert stack.final_value != RRE_ERROR("recursion depth")
+            break
+    else:
+        assert stack.final_value is None

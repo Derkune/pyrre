@@ -3,6 +3,7 @@ from typing import Any
 from pyrre.types import (
     RRE_INT,
     RRE_LIST,
+    RRE_ERROR,
 )
 from rre_testutil import run_program
 
@@ -128,6 +129,74 @@ def test_reverse_list(values: list[int], expected: list[int], memoize: bool) -> 
         memoize=memoize,
     )
     assert result == _int_list(expected)
+
+
+REVERSE_TAIL: str = """
+func main(items)
+    wrapped = rev(items, [])
+    return -(0, wrapped)
+endfunc
+
+func rev(items, acc)@
+    empty = >([], items)
+    wrapped = +([], acc)
+    choices = +(+(0, []), wrapped)
+    pick = -(empty, choices)
+    return ?(pick, rev(-(items, 0), +(-(0, items), acc)))
+endfunc
+"""
+
+
+@pytest.mark.parametrize("memoize", [False, True])
+@pytest.mark.parametrize(
+    "values, expected",
+    [
+        ([], []),
+        ([1], [1]),
+        ([1, 2, 3], [3, 2, 1]),
+        ([4, -2, 0, 7], [7, 0, -2, 4]),
+    ],
+)
+def test_reverse_list_tail(values: list[int], expected: list[int], memoize: bool) -> None:
+    result = run_program(
+        REVERSE_TAIL,
+        inputs=[_int_list(values)],
+        max_steps=10000,
+        to_dump_history=False,
+        memoize=memoize,
+    )
+    assert result == _int_list(expected)
+
+
+@pytest.mark.parametrize("memoize", [False, True])
+def test_reverse_list_tail_stays_within_depth_two(
+    monkeypatch: pytest.MonkeyPatch, memoize: bool
+) -> None:
+    monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 2)
+    result = run_program(
+        REVERSE_TAIL,
+        inputs=[_int_list([1, 2, 3])],
+        max_steps=10000,
+        to_dump_history=False,
+        memoize=memoize,
+    )
+    assert result == _int_list([3, 2, 1])
+
+
+@pytest.mark.parametrize("memoize", [False, True])
+def test_reverse_list_without_tail_exceeds_depth_two(
+    monkeypatch: pytest.MonkeyPatch, memoize: bool
+) -> None:
+    monkeypatch.setattr("pyrre.runtime.MAX_RECURSION_DEPTH", 2)
+    code = REVERSE_TAIL.replace("func rev(items, acc)@", "func rev(items, acc)")
+    result = run_program(
+        code,
+        inputs=[_int_list([1, 2, 3])],
+        max_steps=10000,
+        to_dump_history=False,
+        memoize=memoize,
+    )
+    assert result == RRE_ERROR("recursion depth")
 
 
 MULTIPLY: str = """

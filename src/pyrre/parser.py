@@ -327,6 +327,46 @@ def _check_there_is_main(program: Program) -> None:
     raise ParserErrorException("No main fnction among definitions")
 
 
+def _gather_self_calls(expr: Expr, name: funcname, acc: list[Call]) -> None:
+    match expr:
+        case Call() as call:
+            if call.funcname == name:
+                acc.append(call)
+            for param in call.params:
+                _gather_self_calls(param, name, acc)
+
+
+def _tail_self_call(expr: Expr, name: funcname) -> Call | None:
+    match expr:
+        case Call() as call:
+            if call.funcname == "?":
+                if len(call.params) != 2:
+                    return None
+                return _tail_self_call(call.params[1], name)
+            if call.funcname == name:
+                return call
+            return None
+        case _:
+            return None
+
+
+def _check_tail_recursion(program: Program) -> None:
+    for func in program.functions.values():
+        if FUNC_MODS.TAIL_RECURSE not in func.modifiers:
+            continue
+
+        self_calls: list[Call] = []
+        for line in func.lines:
+            _gather_self_calls(line.expr, func.name, self_calls)
+
+        return_expr = func.lines[-1].expr
+        allowed = _tail_self_call(return_expr, func.name)
+        if any(call is not allowed for call in self_calls):
+            raise ParserErrorException(
+                "tail-recursive call must be the return statement"
+            )
+
+
 def _post_parse_correctness(program: Program) -> Program:
     _check_there_is_main(program)
     _check_unique_func_names_and_starting_letters(program)
@@ -334,6 +374,7 @@ def _post_parse_correctness(program: Program) -> Program:
     _check_unique_exprs(program)
     _check_references_existing_binds(program)
     _check_main_is_not_lazy(program)
+    _check_tail_recursion(program)
     return program
 
 

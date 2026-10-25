@@ -8,6 +8,7 @@ from pyrre.types import (
     FunctionStackFrame,
     ExpressionStackFrame,
     ForceFrame,
+    MemoKey,
     FunctionDef,
     funcname,
     ImmutableMappingViewWithIdx,
@@ -28,7 +29,6 @@ from pyrre.types import (
     FUNC_MODS,
     is_truthy,
     Program,
-    MemoKey,
 )
 from pyrre.static_config import MAX_RECURSION_DEPTH
 
@@ -51,6 +51,17 @@ def store_memo(key: MemoKey | None, val: RRE_VALUE, stack: ProgramStack) -> None
     if isinstance(val, RRE_ERROR) and RECURSION_DEPTH_ERROR.msg in val.msg:
         return
     stack.memo[key] = val
+
+
+def store_frame_memos(
+    memo_key: MemoKey | None,
+    prior_memo_keys: tuple[MemoKey, ...],
+    val: RRE_VALUE,
+    stack: ProgramStack,
+) -> None:
+    store_memo(memo_key, val, stack)
+    for key in prior_memo_keys:
+        store_memo(key, val, stack)
 
 
 def callee_returns_thunk(*, call_func: funcname, stack: ProgramStack) -> bool:
@@ -111,6 +122,33 @@ def try_push_function_frame(frame: FunctionStackFrame, stack: ProgramStack) -> b
         return False
     stack.call_stack.append(frame)
     return True
+
+
+def is_tail_self_call(*, func: FunctionDef, caller_func: funcname) -> bool:
+    return FUNC_MODS.TAIL_RECURSE in func.modifiers and caller_func == func.name
+
+
+def replace_tail_function_frame(
+    new_frame: FunctionStackFrame, stack: ProgramStack
+) -> None:
+    while stack.call_stack and isinstance(stack.call_stack[-1], ExpressionStackFrame):
+        stack.call_stack.pop()
+
+    if not stack.call_stack or not isinstance(
+        stack.call_stack[-1], FunctionStackFrame
+    ):
+        raise RuntimeErrorException("tail recurse expected a function frame")
+
+    old = stack.call_stack[-1]
+    if old.funcname != new_frame.funcname:
+        raise RuntimeErrorException("tail recurse function mismatch")
+
+    priors = list(old.prior_memo_keys)
+    if old.memo_key is not None:
+        priors.append(old.memo_key)
+    new_frame.prior_memo_keys = tuple(priors)
+    stack.call_stack.pop()
+    stack.call_stack.append(new_frame)
 
 
 def value_contains_thunk(val: RRE_VALUE) -> bool:
@@ -233,7 +271,7 @@ def handle_value_from_return_of_function(val: RRE_VALUE, stack: ProgramStack) ->
             "handle_value_from_return_of_function assumed to come from FunctionStackFrame"
         )
 
-    store_memo(top_frame.memo_key, val, stack)
+    store_frame_memos(top_frame.memo_key, top_frame.prior_memo_keys, val, stack)
     stack.call_stack.pop(-1)
     continue_after_call_result(val, stack)
 
@@ -245,7 +283,7 @@ def complete_force_frame(val: RRE_VALUE, stack: ProgramStack) -> None:
             "complete_force_frame assumed to come from ForceFrame"
         )
 
-    store_memo(top_frame.memo_key, val, stack)
+    store_frame_memos(top_frame.memo_key, top_frame.prior_memo_keys, val, stack)
     stack.call_stack.pop(-1)
     continue_after_call_result(val, stack)
 
@@ -286,6 +324,9 @@ def schedule_forced_thunk(thunk: RRE_THUNK, stack: ProgramStack) -> None:
         evaluated_args=list(thunk.arguments),
         func=func,
     )
+    if is_tail_self_call(func=func, caller_func=top_frame.caller_func):
+        replace_tail_function_frame(frame, stack)
+        return
     if not try_push_function_frame(frame, stack):
         handle_value_from_top_of_stack(RECURSION_DEPTH_ERROR, stack)
 
@@ -350,6 +391,7 @@ def response_if_func_call_parameters_evaluated(
     call: Call,
     evaluated_args: list[RRE_VALUE],
     func: FunctionDef,
+    caller_func: funcname,
     stack: ProgramStack,
 ) -> Callable[[], None]:
     def response() -> None:
@@ -362,6 +404,9 @@ def response_if_func_call_parameters_evaluated(
         frame = construct_function_call_frame(
             call=call, evaluated_args=evaluated_args, func=func
         )
+        if is_tail_self_call(func=func, caller_func=caller_func):
+            replace_tail_function_frame(frame, stack)
+            return
         if not try_push_function_frame(frame, stack):
             handle_value_from_top_of_stack(RECURSION_DEPTH_ERROR, stack)
 
@@ -410,6 +455,7 @@ def process_expression_frame(frame: ExpressionStackFrame, stack: ProgramStack) -
                 call=frame.expr,
                 evaluated_args=frame.evaluated_args,
                 func=stack.program.functions[frame.expr.funcname],
+                caller_func=frame.caller_func,
                 stack=stack,
             )
 
@@ -440,11 +486,16 @@ def process_function_frame(frame: FunctionStackFrame, stack: ProgramStack) -> No
             return
 
         memo_key = frame.memo_key
+        prior_memo_keys = frame.prior_memo_keys
         stack.call_stack.pop(-1)
         if value_contains_thunk(val):
-            stack.call_stack.append(ForceFrame(val, memo_key=memo_key))
+            stack.call_stack.append(
+                ForceFrame(
+                    val, memo_key=memo_key, prior_memo_keys=prior_memo_keys
+                )
+            )
         else:
-            store_memo(memo_key, val, stack)
+            store_frame_memos(memo_key, prior_memo_keys, val, stack)
             continue_after_call_result(val, stack)
         return
 
