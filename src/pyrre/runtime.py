@@ -308,7 +308,7 @@ def deliver_to_parent(val: RRE_VALUE, stack: ProgramStack) -> None:
     elif isinstance(top_frame, ForceFrame):
         top_frame.value = val
     else:
-        raise RuntimeErrorException("Unkown type of a frame in call stack")
+        raise RuntimeErrorException("Unknown type of a frame in call stack")
 
 
 def handle_value_from_top_of_stack(val: RRE_VALUE, stack: ProgramStack) -> None:
@@ -531,7 +531,7 @@ def process_expression_frame(frame: ExpressionStackFrame, stack: ProgramStack) -
         )
     else:
         raise RuntimeErrorException(
-            "unknown type in frame.expr in process_statement_frame"
+            "unknown type in frame.expr in process_expression_frame"
         )
 
 
@@ -607,7 +607,7 @@ def execute_step(stack: ProgramStack) -> ProgramStack:
     elif isinstance(top_frame, ForceFrame):
         process_force_frame(top_frame, stack)
     else:
-        raise RuntimeErrorException("Unkown type of a frame in call stack")
+        raise RuntimeErrorException("Unknown type of a frame in call stack")
 
     return stack
 

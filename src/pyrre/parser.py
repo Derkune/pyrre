@@ -49,7 +49,7 @@ def parse_RRE_string(text: str) -> RRE_LIST:
             MIN_CHAR_REPRESENTABLE_INT > ord(char)
             or ord(char) > MAX_CHAR_REPRESENTABLE_INT
         ):
-            raise ParserErrorException(f"{char} is not allowed in a RRE string")
+            raise ParserErrorException(f"{char} is not allowed in an RRE string")
 
         if MIN_INT > ord(char) or ord(char) > MAX_INT:
             raise ParserErrorException(
@@ -231,14 +231,14 @@ def _check_main_is_not_lazy(program: Program) -> None:
         raise ParserErrorException("main can't be lazy")
 
 
-def _gather_bindss_referenced_in_expr(expr: Expr) -> set[str]:
+def _gather_binds_referenced_in_expr(expr: Expr) -> set[str]:
     match expr:
         case Binding() as bind:
             return set([bind.bindname])
         case Call() as call:
             s = set()
             for call_expr in call.params:
-                s.update(_gather_bindss_referenced_in_expr(call_expr))
+                s.update(_gather_binds_referenced_in_expr(call_expr))
             return s
         case _:
             return set()
@@ -248,7 +248,7 @@ def _check_references_existing_binds(program: Program) -> None:
     for func in program.functions.values():
         funcbinds = set(func.param_names)
         for line in func.lines:
-            binds_referenced = _gather_bindss_referenced_in_expr(line.expr)
+            binds_referenced = _gather_binds_referenced_in_expr(line.expr)
 
             if binds_referenced.difference(funcbinds):
                 raise ParserErrorException("referencing an undefined binding")
@@ -324,7 +324,7 @@ def _check_there_is_main(program: Program) -> None:
     if _find_main(program) is not None:
         return
 
-    raise ParserErrorException("No main fnction among definitions")
+    raise ParserErrorException("No main function among definitions")
 
 
 def _gather_self_calls(expr: Expr, name: funcname, acc: list[Call]) -> None:
