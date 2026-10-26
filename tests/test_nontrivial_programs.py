@@ -142,7 +142,10 @@ func rev(items, acc)@
     wrapped = +([], acc)
     choices = +(+(0, []), wrapped)
     pick = -(empty, choices)
-    return ?(pick, rev(-(items, 0), +(-(0, items), acc)))
+    last_element = -(0, items)
+    items_without_last_elem = -(items, 0)
+    acc_with_last_elem = +(last_element, acc)
+    return ?(pick, rev(items_without_last_elem, acc_with_last_elem))
 endfunc
 """
 
@@ -157,7 +160,9 @@ endfunc
         ([4, -2, 0, 7], [7, 0, -2, 4]),
     ],
 )
-def test_reverse_list_tail(values: list[int], expected: list[int], memoize: bool) -> None:
+def test_reverse_list_tail(
+    values: list[int], expected: list[int], memoize: bool
+) -> None:
     result = run_program(
         REVERSE_TAIL,
         inputs=[_int_list(values)],
