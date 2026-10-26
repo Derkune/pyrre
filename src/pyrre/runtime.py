@@ -1,6 +1,4 @@
-import copy
-from typing import Iterable, Type, Callable, get_args, cast
-from functools import wraps
+from typing import Iterable, Callable
 from dataclasses import dataclass, field
 
 from pyrre.types import (
@@ -89,33 +87,39 @@ def find_main(function_names: Iterable[funcname]) -> funcname:
     raise RuntimeErrorException("Can't find main")
 
 
+def bind_arguments(
+    param_names: Iterable[str], values: Iterable[RRE_VALUE]
+) -> dict[str, RRE_VALUE]:
+    return dict(zip(param_names, values, strict=True))
+
+
+def memo_key_if_memoized(
+    func: FunctionDef, name: funcname, args: Iterable[RRE_VALUE]
+) -> MemoKey | None:
+    if FUNC_MODS.MEMOIZE not in func.modifiers:
+        return None
+    return memo_key_for(name, args)
+
+
 def construct_point_of_entry_frame(stack: ProgramStack) -> FunctionStackFrame:
     main_name = find_main(stack.program.functions.keys())
     main_func = stack.program.functions[main_name]
-
-    bindings: dict[str, RRE_VALUE] = {}
-    for param, passed_val in zip(
-        main_func.param_names, stack.program_inputs, strict=True
-    ):
-        bindings[param] = passed_val
-
-    memo_key = None
-    if FUNC_MODS.MEMOIZE in main_func.modifiers:
-        memo_key = memo_key_for(main_name, stack.program_inputs)
-    return FunctionStackFrame(main_name, bindings, memo_key=memo_key)
+    bindings = bind_arguments(main_func.param_names, stack.program_inputs)
+    return FunctionStackFrame(
+        main_name,
+        bindings,
+        memo_key=memo_key_if_memoized(main_func, main_name, stack.program_inputs),
+    )
 
 
 def construct_function_call_frame(
     *, call: Call, evaluated_args: list[RRE_VALUE], func: FunctionDef
 ) -> FunctionStackFrame:
-    arg_vals: dict[str, RRE_VALUE] = {}
-    for val, name in zip(evaluated_args, func.param_names, strict=True):
-        arg_vals[name] = val
-
-    memo_key = None
-    if FUNC_MODS.MEMOIZE in func.modifiers:
-        memo_key = memo_key_for(call.funcname, evaluated_args)
-    return FunctionStackFrame(call.funcname, arg_vals, memo_key=memo_key)
+    return FunctionStackFrame(
+        call.funcname,
+        bind_arguments(func.param_names, evaluated_args),
+        memo_key=memo_key_if_memoized(func, call.funcname, evaluated_args),
+    )
 
 
 def function_frame_count(stack: ProgramStack) -> int:
@@ -165,11 +169,7 @@ def wellfoundedness_error(
 def replace_tail_function_frame(
     new_frame: FunctionStackFrame, stack: ProgramStack
 ) -> None:
-    for _ in range(len(stack.call_stack)):
-        if not stack.call_stack or not isinstance(
-            stack.call_stack[-1], ExpressionStackFrame
-        ):
-            break
+    while stack.call_stack and isinstance(stack.call_stack[-1], ExpressionStackFrame):
         stack.call_stack.pop()
 
     if not stack.call_stack or not isinstance(stack.call_stack[-1], FunctionStackFrame):
@@ -216,45 +216,74 @@ def thunk_arity_error(thunk: RRE_THUNK, stack: ProgramStack) -> RRE_ERROR | None
     return None
 
 
-def push_thunk_evaluation(thunk: RRE_THUNK, stack: ProgramStack) -> None:
-    if thunk.funcname in PRIMITIVE_OPS:
-        stack.call_stack.append(
-            ExpressionStackFrame(
-                Call(thunk.funcname, ()),
-                "",
-                ImmutableMappingViewWithIdx(),
-                evaluated_args=list(thunk.arguments),
-            )
-        )
-        return
+def evaluated_primitive_frame(
+    *,
+    op_name: funcname,
+    caller_func: funcname,
+    bindings: ImmutableMappingViewWithIdx[str, RRE_VALUE],
+    arguments: Iterable[RRE_VALUE],
+) -> ExpressionStackFrame:
+    return ExpressionStackFrame(
+        Call(op_name, ()),
+        caller_func,
+        bindings,
+        evaluated_args=list(arguments),
+    )
 
-    func = stack.program.functions[thunk.funcname]
-    cached = lookup_memo(func, memo_key_for(thunk.funcname, thunk.arguments), stack)
+
+def begin_user_call(
+    *,
+    call: Call,
+    evaluated_args: list[RRE_VALUE],
+    func: FunctionDef,
+    tail: bool,
+    on_value: Callable[[RRE_VALUE], None],
+    stack: ProgramStack,
+) -> None:
+    cached = lookup_memo(func, memo_key_for(call.funcname, evaluated_args), stack)
     if cached is not None:
-        complete_force_frame(cached, stack)
+        on_value(cached)
         return
-    evaluated_args = list(thunk.arguments)
     wf_error = wellfoundedness_error(
         func=func, evaluated_args=evaluated_args, stack=stack
     )
     if wf_error is not None:
-        complete_force_frame(wf_error, stack)
+        on_value(wf_error)
         return
     frame = construct_function_call_frame(
-        call=Call(thunk.funcname, ()),
-        evaluated_args=evaluated_args,
-        func=func,
+        call=call, evaluated_args=evaluated_args, func=func
     )
+    if tail:
+        replace_tail_function_frame(frame, stack)
+        return
     if not try_push_function_frame(frame, stack):
-        complete_force_frame(RECURSION_DEPTH_ERROR, stack)
+        on_value(RECURSION_DEPTH_ERROR)
+
+
+def push_thunk_evaluation(thunk: RRE_THUNK, stack: ProgramStack) -> None:
+    if thunk.funcname in PRIMITIVE_OPS:
+        stack.call_stack.append(
+            evaluated_primitive_frame(
+                op_name=thunk.funcname,
+                caller_func="",
+                bindings=ImmutableMappingViewWithIdx(),
+                arguments=thunk.arguments,
+            )
+        )
+        return
+
+    begin_user_call(
+        call=Call(thunk.funcname, ()),
+        evaluated_args=list(thunk.arguments),
+        func=stack.program.functions[thunk.funcname],
+        tail=False,
+        on_value=lambda val: complete_force_frame(val, stack),
+        stack=stack,
+    )
 
 
 def set_program_result(val: RRE_VALUE, stack: ProgramStack) -> None:
     stack.final_value = program_output_value(val)
-
-
-def receive_into_force_frame(frame: ForceFrame, val: RRE_VALUE) -> None:
-    frame.value = val
 
 
 def deliver_to_parent(val: RRE_VALUE, stack: ProgramStack) -> None:
@@ -273,7 +302,7 @@ def deliver_to_parent(val: RRE_VALUE, stack: ProgramStack) -> None:
     elif isinstance(top_frame, ExpressionStackFrame):
         top_frame.evaluated_args.append(val)
     elif isinstance(top_frame, ForceFrame):
-        receive_into_force_frame(top_frame, val)
+        top_frame.value = val
     else:
         raise RuntimeErrorException("Unkown type of a frame in call stack")
 
@@ -294,10 +323,18 @@ def continue_after_call_result(val: RRE_VALUE, stack: ProgramStack) -> None:
 
     top_frame = stack.call_stack[-1]
     if isinstance(top_frame, ForceFrame):
-        receive_into_force_frame(top_frame, val)
+        top_frame.value = val
         return
 
     handle_value_from_top_of_stack(val, stack)
+
+
+def pop_memoized_frame(
+    frame: FunctionStackFrame | ForceFrame, val: RRE_VALUE, stack: ProgramStack
+) -> None:
+    store_frame_memos(frame.memo_key, frame.prior_memo_keys, val, stack)
+    stack.call_stack.pop(-1)
+    continue_after_call_result(val, stack)
 
 
 def handle_value_from_return_of_function(val: RRE_VALUE, stack: ProgramStack) -> None:
@@ -307,9 +344,7 @@ def handle_value_from_return_of_function(val: RRE_VALUE, stack: ProgramStack) ->
             "handle_value_from_return_of_function assumed to come from FunctionStackFrame"
         )
 
-    store_frame_memos(top_frame.memo_key, top_frame.prior_memo_keys, val, stack)
-    stack.call_stack.pop(-1)
-    continue_after_call_result(val, stack)
+    pop_memoized_frame(top_frame, val, stack)
 
 
 def complete_force_frame(val: RRE_VALUE, stack: ProgramStack) -> None:
@@ -319,9 +354,7 @@ def complete_force_frame(val: RRE_VALUE, stack: ProgramStack) -> None:
             "complete_force_frame assumed to come from ForceFrame"
         )
 
-    store_frame_memos(top_frame.memo_key, top_frame.prior_memo_keys, val, stack)
-    stack.call_stack.pop(-1)
-    continue_after_call_result(val, stack)
+    pop_memoized_frame(top_frame, val, stack)
 
 
 def schedule_forced_thunk(thunk: RRE_THUNK, stack: ProgramStack) -> None:
@@ -339,37 +372,24 @@ def schedule_forced_thunk(thunk: RRE_THUNK, stack: ProgramStack) -> None:
     if thunk.funcname in PRIMITIVE_OPS:
         stack.call_stack.pop(-1)
         stack.call_stack.append(
-            ExpressionStackFrame(
-                Call(thunk.funcname, ()),
-                top_frame.caller_func,
-                top_frame.bindings,
-                evaluated_args=list(thunk.arguments),
+            evaluated_primitive_frame(
+                op_name=thunk.funcname,
+                caller_func=top_frame.caller_func,
+                bindings=top_frame.bindings,
+                arguments=thunk.arguments,
             )
         )
         return
 
     func = stack.program.functions[thunk.funcname]
-    cached = lookup_memo(func, memo_key_for(thunk.funcname, thunk.arguments), stack)
-    if cached is not None:
-        handle_value_from_top_of_stack(cached, stack)
-        return
-    evaluated_args = list(thunk.arguments)
-    wf_error = wellfoundedness_error(
-        func=func, evaluated_args=evaluated_args, stack=stack
-    )
-    if wf_error is not None:
-        handle_value_from_top_of_stack(wf_error, stack)
-        return
-    frame = construct_function_call_frame(
+    begin_user_call(
         call=Call(thunk.funcname, ()),
-        evaluated_args=evaluated_args,
+        evaluated_args=list(thunk.arguments),
         func=func,
+        tail=is_tail_self_call(func=func, caller_func=top_frame.caller_func),
+        on_value=lambda val: handle_value_from_top_of_stack(val, stack),
+        stack=stack,
     )
-    if is_tail_self_call(func=func, caller_func=top_frame.caller_func):
-        replace_tail_function_frame(frame, stack)
-        return
-    if not try_push_function_frame(frame, stack):
-        handle_value_from_top_of_stack(RECURSION_DEPTH_ERROR, stack)
 
 
 def response_if_op_args_evaluated(
@@ -436,24 +456,14 @@ def response_if_func_call_parameters_evaluated(
     stack: ProgramStack,
 ) -> Callable[[], None]:
     def response() -> None:
-        cached = lookup_memo(func, memo_key_for(call.funcname, evaluated_args), stack)
-        if cached is not None:
-            handle_value_from_top_of_stack(cached, stack)
-            return
-        wf_error = wellfoundedness_error(
-            func=func, evaluated_args=evaluated_args, stack=stack
+        begin_user_call(
+            call=call,
+            evaluated_args=evaluated_args,
+            func=func,
+            tail=is_tail_self_call(func=func, caller_func=caller_func),
+            on_value=lambda val: handle_value_from_top_of_stack(val, stack),
+            stack=stack,
         )
-        if wf_error is not None:
-            handle_value_from_top_of_stack(wf_error, stack)
-            return
-        frame = construct_function_call_frame(
-            call=call, evaluated_args=evaluated_args, func=func
-        )
-        if is_tail_self_call(func=func, caller_func=caller_func):
-            replace_tail_function_frame(frame, stack)
-            return
-        if not try_push_function_frame(frame, stack):
-            handle_value_from_top_of_stack(RECURSION_DEPTH_ERROR, stack)
 
     return response
 
@@ -480,8 +490,8 @@ def process_expression_frame(frame: ExpressionStackFrame, stack: ProgramStack) -
     if isinstance(frame.expr, Binding):
         binding_value = frame.bindings[frame.expr.bindname]
         handle_value_from_top_of_stack(binding_value, stack)
-    elif isinstance(frame.expr, get_args(RRE_VALUE)):
-        handle_value_from_top_of_stack(cast(RRE_VALUE, frame.expr), stack)
+    elif isinstance(frame.expr, (RRE_INT, RRE_LIST, RRE_THUNK, RRE_ERROR)):
+        handle_value_from_top_of_stack(frame.expr, stack)
     elif isinstance(frame.expr, Call):
         if frame.reduce_to_thunk or callee_returns_thunk(
             call_func=frame.expr.funcname, stack=stack
