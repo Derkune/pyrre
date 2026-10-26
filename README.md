@@ -1,6 +1,11 @@
-RRE: Functional esolang. Planned for an eventual graphical syntax and gamefication.
+# RRE
 
-Example program. It computes the Nth triangular number:
+Functional esolang. Planned for an eventual graphical syntax and gamification.
+
+## Example
+
+This computes the Nth triangular number:
+
 ```
 func main(n)
     raw = tri(n)
@@ -15,74 +20,119 @@ func tri(n)
 endfunc
 ```
 
-Specification:
+## Specification
 
-There are 4 types: int and list and thunk and error.
-Integers can be negative.
-Lists are immutable and can hold both ints and other lists and thunks.
-Thunks are like lists, containing values of arguments, and metadata for the function to apply.
-Errors carry error messages. Errors infect every operation, forcing it to output error when evaluated. The exceptions are an operation with 2 errors, where they're combined to propagate the error messages, and the ? operator, which leaves the second arg unevaluated until needed.
+### Types
 
-Programs are defined as sequences of functions. Functions must have different names, start with different letters (reserved for a graphical interface), and have a main function as an entry point.
-Functions are defined as sequences of binding expressions, followed by a return statement. Function names, argument names, and binding names must start with a letter. Binding names must be unique, not collide with argument names, and any binding can only reference earlier bindings or function arguments in its value expression.
+There are 4 types: int, list, thunk, and error.
 
-A function starts with the keyword func, followed by the name of the function, followed by argument name list separated by commas in parentheses.
-After parentheses can go 0 or more symbols from the set `!@#%`. These are function modifiers.
-After this goes a sequence of binding definitions, then the return statement, then the endfunc keyword.
+- Integers can be negative.
+- Lists are immutable and can hold ints, other lists, and thunks.
+- Thunks are like lists, containing argument values and metadata for the function to apply.
+- Errors carry error messages. An error infects every operation, forcing it to output an error when evaluated. The exceptions are operations with 2 errors, where the messages are combined and propagated, and `?`, which leaves the second argument unevaluated until it is needed.
 
-Bindings look like a binding name, followed by the = sign, followed by the binding expression.
-Return statement looks like the `return` keyword, followed by an expression.
-Every expression consists of function calls. A function call looks like the function name, followed by the list of argument expressions, separated by commas, in parentheses. Function calls can be composed in one expression. 
+### Programs and functions
 
-Functions can be either user-defined functions, referenced by their names, or the 4 primitive operation functions, `+-?≥`, referenced by their symbols. The last one has an alias for ease of typing, `>`.
+Programs are sequences of functions. Functions must have different names and must start with different letters (reserved for a graphical interface). A program must have a `main` function as its entry point.
 
-Function call arguments can be binding names, names of arguments in the caller function, calls to other functions, or constants.
+A function is a sequence of bindings followed by a return statement. Function names, argument names, and binding names must start with a letter. Binding names must be unique, must not collide with argument names, and a binding may reference only earlier bindings or function arguments in its value expression.
 
-Integer constants are sequences of digits, or a `-` immediately followed by digits with no space. The value must lie in `[MIN_INT, MAX_INT]`. 
-List constants are one of 2: either the empty list constant `[]`, or a string of characters in "quotes". These characters must be ASCII characters with integer values between 32 and 126. A `"` in a string is written as `\"`. No other escape is recognized: a backslash is a literal character unless it is immediately followed by `"`. Characters are converted to integers with those values.
+A function starts with the keyword `func`, followed by the function name, followed by a comma-separated list of argument names in parentheses.
+After the parentheses, 0 or more symbols from the set `!@#%` may appear. These are function modifiers.
+After that comes a sequence of bindings, then the return statement, then the keyword `endfunc`.
+
+A binding is a name, followed by `=`, followed by an expression.
+A return statement is the keyword `return`, followed by an expression.
+
+### Expressions
+
+An expression is a constant, a name, or a function call. A call is the function name, followed by argument expressions separated by commas, in parentheses. Calls can be nested.
+
+A call may name a user-defined function, or one of the 4 primitive operations `+`, `-`, `?`, and `≥`. The last one has an alias for ease of typing, `>`.
+
+Call arguments can be binding names, names of arguments in the caller, calls to other functions, or constants.
+
+### Constants
+
+Integer constants are sequences of digits, possibly starting with `-`. The value must lie in `[MIN_INT, MAX_INT]`.
+
+List constants are one of 2: either the empty list `[]`, or a string of characters in double quotes. These characters must be ASCII characters with integer values between 32 and 126. A double quote in a string is written as `\"`. No other escape is recognized: a backslash is a literal character unless it is immediately followed by a double quote. Characters are converted to integers with those values.
+
 Error constants look like a function call named `~` with a single string argument, for example `~("Error message")`. The argument must be a quoted string literal. The error message is that string's text.
 
-Return values for operation functions:
+### Operations
 
-+: 2 args.
-int, int: sum, clamped into [MIN_INT, MAX_INT]
-int, list/thunk: list/thunk with int prepended
-list/thunk, int: list/thunk with int appended
-list/thunk1, list/thunk2: list/thunk1 with list/thunk2 appended as an item
-Lists and thunks are limited to MAX_LIST_LENGTH items (thunk arguments count as items) and MAX_LIST_NESTING_DEPTH nesting. Empty lists and thunks have nesting depth 1. If an operation would produce a list or thunk outside these limits, it is a noop on the list or thunk being grown: prepend/append that would exceed returns that sequence unchanged; list1 + list2 that would exceed returns list1.
-error, anything; anything, error: the error
-error, error: error with their messages combined
+#### `+`
 
+2 args.
 
-Indexes are 0-based.
--: 2 args.
-int, int: difference, clamped into [MIN_INT, MAX_INT]
-int, list/thunk: retrieval of item in list/thunk at idx int. If int is outside the bounds of list/thunk, it is clamped inside. If list/thunk has 0 items, output the int.
-list/thunk, int: copying of list/thunk with item at int idx removed. If int is outside the bounds of list/thunk, it is clamped inside. If list/thunk has 0 items, the output is list/thunk.
-list/thunk1, list/thunk2: return a modified copy of list/thunk1. Remove the item from the result for every item in list/thunk2. (List-based, not set-based)
-error, anything; anything, error: the error
-error, error: error with their messages combined
+- int, int: sum, clamped into `[MIN_INT, MAX_INT]`.
+- int, list/thunk: list/thunk with the int prepended.
+- list/thunk, int: list/thunk with the int appended.
+- list/thunk, list/thunk: the first with the second appended as an item.
+- error, anything; anything, error: the error.
+- error, error: an error with their messages combined.
 
-≥: comparison of 2 args. Return 1 if item 1 is bigger than or equal to item 2. Return 0 otherwise.
-Comparison of 2 integers is by absolute value first; if the absolute values are equal, the negative integer is smaller. Lists are always bigger than ints. Thunks are always bigger than lists. Errors are always bigger than thunks. Comparison of 2 lists or 2 thunks is lexicographical, with shorter lists considered smaller. 2 thunks with different functions are compared by the index of the function in the program.
-error, error: error with their messages combined
+Lists and thunks are limited to `MAX_LIST_LENGTH` items (thunk arguments count as items) and `MAX_LIST_NESTING_DEPTH` nesting. Empty lists and thunks have nesting depth 1. If an operation would produce a list or thunk outside these limits, it is a no-op on the list or thunk being grown: a prepend or append that would exceed a limit returns that sequence unchanged; `list1 + list2` that would exceed a limit returns `list1`.
 
-?: choice between 2 args. Returns the value of arg1 if it is "truthy", or return the value of arg2 if arg1 is "falsy". Arg 2 is evaluated lazily unless arg1 is truthy, which is necessary for recursion termination. 
-Integer 0 is falsy, and the rest are truthy. Empty list is falsy, and the rest are truthy. Thunk is always truthy. Error is always truthy.
+#### `-`
 
-Function modifiers:
+2 args. Indexes are 0-based.
 
-!: assert wellfoundedness. On entry, after a memoization miss and before a frame is pushed or tail-replaced, compare the new argument list to the nearest live function frame of the same name. If none exists, the call is allowed. If one exists, the new arguments must be strictly smaller, or the call returns an error and does not enter. Other live functions are ignored, so mutual recursion is checked on each function's own re-entry. Integers use the same order as ≥; lists and thunks use the same lexicographic order as ≥. Creating a % thunk does not check until that thunk is forced. A memoization hit is not checked. Assertion failure outputs an error.
-@: tail recurse, reuses the live function frame so a self-call does not increase call depth. Valid only when every self-call is the tail call of the return: the return expression itself, or the lazy branch of a `?` (including nested `?`). Verified at parsing stage.
-#: memoize, makes a function remember the IO pairs, skipping the computation on repeated calls. The table is keyed by function name and the evaluated argument list. A hit returns the stored value without pushing a function frame. A call that has not returned is not a hit. Recursion-depth errors are not stored; other errors are. Functions with both # and % still produce a thunk at the call site; the table is consulted when that thunk is forced, and stores the unforced body result. Eager functions store the value after a thunk return has been forced. A returned list may still contain thunks.
-%: output lazily, makes a function output the thunk of its call. This evaluates values of arguments to the call and creates a thunk with the function's name and list of arguments.
+- int, int: difference, clamped into `[MIN_INT, MAX_INT]`.
+- int, list/thunk: the item in the list/thunk at that index. If the index is outside the bounds, it is clamped inside. If the list/thunk has 0 items, the result is the integer argument.
+- list/thunk, int: a copy of the list/thunk with the item at that index removed. If the index is outside the bounds, it is clamped inside. If the list/thunk has 0 items, the result is the list/thunk argument.
+- list/thunk, list/thunk: a modified copy of the first. Remove the item from the result for every item in the second (list-based, not set-based).
+- error, anything; anything, error: the error.
+- error, error: an error with their messages combined.
 
-Evaluation of thunks:
-Functions without the "output lazily" modifier force a thunk returned as the value itself. Thunk items wrapped inside lists are left unevaluated. Entry point "main" cannot have the "output lazily" modifier. Attempting to evaluate a thunk with a wrong number of arguments outputs an error. Program output cannot be a thunk. When the program result is assigned, values are walked left to right, depth-first: the first error found in lists becomes the result; the first thunk found in lists becomes an error with message "Can't output thunks". Nested lists are walked; thunk arguments are not.
+#### `≥`
 
-Example programs:
+Alias: `>`.
 
-Triangular numbers. Unlike the shown example, it uses thunk evaluation to terminate recursion.
+Comparison of 2 args. Returns 1 if the first item is bigger than or equal to the second. Returns 0 otherwise.
+
+Comparison of 2 integers is by absolute value first; if the absolute values are equal, the negative integer is smaller. Lists are always bigger than ints. Thunks are always bigger than lists. Errors are always bigger than thunks. Comparison of 2 lists or 2 thunks is lexicographical, with the shorter one considered smaller. 2 thunks with different functions are compared by the index of the function in the program.
+
+- error, error: an error with their messages combined.
+
+#### `?`
+
+Choice between 2 args. Returns the value of arg 1 if it is truthy, or returns the value of arg 2 if arg 1 is falsy. Arg 2 is evaluated only when arg 1 is falsy, which is necessary for recursion termination.
+
+- Integer 0 is falsy, and the rest are truthy.
+- The empty list is falsy, and the rest are truthy.
+- A thunk is always truthy.
+- An error is always truthy.
+
+### Function modifiers
+
+#### `!`
+
+Assert wellfoundedness. On entry, after a memoization miss and before a frame is pushed or tail-replaced, compare the new argument list to the nearest live function frame of the same name. If none exists, the call is allowed. If one exists, the new arguments must be strictly smaller, or the call returns an error and does not enter. Other live functions are ignored, so mutual recursion is checked on each function's own re-entry. Integers use the same order as `≥`; lists and thunks use the same lexicographic order as `≥`. Creating a `%` thunk does not check until that thunk is forced. A memoization hit is not checked. Assertion failure outputs an error.
+
+#### `@`
+
+Tail recurse. Reuses the live function frame so a self-call does not increase call depth. Valid only when every self-call is the tail call of the return: the return expression itself, or the lazy branch of a `?` (including nested `?`). Verified at parsing stage.
+
+#### `#`
+
+Memoize. Makes a function remember its input-output pairs, skipping the computation on repeated calls. The table is keyed by function name and the evaluated argument list. A hit returns the stored value without pushing a function frame. A call that has not returned is not a hit. Recursion-depth errors are not stored; other errors are. Functions with both `#` and `%` still produce a thunk at the call site; the table is consulted when that thunk is forced, and stores the unforced body result. Eager functions store the value after a thunk return has been forced. A returned list may still contain thunks.
+
+#### `%`
+
+Output lazily. Makes a function output the thunk of its call. This evaluates the arguments and creates a thunk with the function's name and the list of arguments.
+
+### Evaluation of thunks
+
+Functions without the "output lazily" modifier force a thunk returned as the value itself. Thunk items wrapped inside lists are left unevaluated. The entry point `main` cannot have the "output lazily" modifier. Attempting to evaluate a thunk with the wrong number of arguments outputs an error. Program output cannot be a thunk. When the program result is assigned, values are walked left to right, depth-first: the first error found in lists becomes the result; the first thunk found in lists becomes an error with message `Can't output thunks`. Nested lists are walked; thunk arguments are not.
+
+## Example programs
+
+### Triangular numbers
+
+Unlike the example above, this one uses thunk evaluation to terminate recursion.
+
 ```
 func main(n)
     return tri(n, 0)
@@ -100,7 +150,8 @@ func tri(n, acc)%
 endfunc
 ```
 
-List reversal:
+### List reversal
+
 ```
 func main(items)
     return rev(items, [])
@@ -122,7 +173,8 @@ func rev(items, acc)
 endfunc
 ```
 
-List reversal using tail recursion:
+### List reversal using tail recursion
+
 ```
 func main(items)
     wrapped = rev(items, [])
@@ -141,7 +193,8 @@ func rev(items, acc)@
 endfunc
 ```
 
-Multiplication of numbers:
+### Multiplication of numbers
+
 ```
 func main(a, b)
     nonneg = >(b, -(0, b))
@@ -160,7 +213,8 @@ func times(a, count)
 endfunc
 ```
 
-"Capitalization" of letters in a list:
+### "Capitalization" of letters in a list
+
 ```
 func main(items)
     return caps(items)
@@ -192,7 +246,10 @@ func up(n)
 endfunc
 ```
 
-Using arg 1 to "modulate" the values in arg 2. This showcases the power of thunks.
+### Using arg 1 to "modulate" the values in arg 2
+
+This showcases the power of thunks.
+
 ```
 func main(mods, data)
     return step(mods, data, [])
