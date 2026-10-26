@@ -317,3 +317,23 @@ func nest(item)%
     return +([], +(item, []))
 endfunc
 ```
+
+### Fibonacci
+
+This showcases the speedup from memoization.
+
+```
+func main(n)
+    return fib(n)
+endfunc
+
+func fib(n)#
+    done = >(1, n)
+    n1 = -(n, 1)
+    n2 = -(n, 2)
+    rec = ?(done, +(fib(n1), fib(n2)))
+    pick = -(1, done)
+    choices = +(+(n, []), rec)
+    return -(pick, choices)
+endfunc
+```
