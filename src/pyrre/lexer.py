@@ -50,20 +50,30 @@ def lex(text: str) -> list[Token]:
     lexed: list[Token] = []
     accumulated: list[str] = []
     inside_quote: bool = False
+    skip_next: bool = False
 
-    for char in text:
-        if char == QUOTE:
-            if inside_quote:
+    for i, char in enumerate(text):
+        if skip_next:
+            skip_next = False
+            continue
+        if inside_quote:
+            if char == "\\" and i + 1 < len(text) and text[i + 1] == QUOTE:
+                accumulated.append(QUOTE)
+                skip_next = True
+                continue
+            if char == QUOTE:
                 joined = "".join(accumulated)
                 if len(joined) > MAX_LIST_LENGTH:
                     raise LexerErrorException("string is too long")
                 lexed.append(Token(TokenType.CONSTSTR, joined))
                 accumulated = []
-            inside_quote = not inside_quote
+                inside_quote = False
+                continue
+            accumulated.append(char)
             continue
 
-        if inside_quote:
-            accumulated.append(char)
+        if char == QUOTE:
+            inside_quote = True
             continue
 
         if char in SINGLE_CHAR_TOKENS or char in string.whitespace:

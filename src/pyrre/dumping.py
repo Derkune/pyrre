@@ -9,7 +9,13 @@ from pyrre.types import (
     Program,
     FunctionDef,
     funcname,
+    RRE_LIST,
+    RRE_THUNK,
+    RRE_INT,
+    RRE_ERROR,
+    RRE_VALUE,
 )
+from pyrre.static_config import MAX_CHAR_REPRESENTABLE_INT, MIN_CHAR_REPRESENTABLE_INT
 
 
 def dataclass_default(obj):
@@ -141,3 +147,26 @@ def dump_history(
         lines.extend(dump_stack(snapshot, idx))
 
     return "\n".join(lines)
+
+
+def prettify_chars(val: RRE_VALUE) -> str:
+    match val:
+        case RRE_INT():
+            if (
+                val.value <= MAX_CHAR_REPRESENTABLE_INT
+                and val.value >= MIN_CHAR_REPRESENTABLE_INT
+            ):
+                return chr(val.value)
+            else:
+                return "□"
+        case RRE_LIST():
+            parts: list[str] = []
+
+            for item in val.value:
+                parts.append(prettify_chars(item))
+
+            return "".join(parts)
+        case RRE_THUNK():
+            return "█"
+        case RRE_ERROR():
+            return "░"

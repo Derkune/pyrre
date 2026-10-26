@@ -454,6 +454,47 @@ def test_error_string_literal_too_long() -> None:
 
 
 @pytest.mark.parametrize("memoize", [False, True])
+def test_string_literal_escaped_quote(memoize: bool) -> None:
+    code = 'func main()\n    return "a\\"b"\nendfunc'
+    expected = RRE_LIST.create(tuple(RRE_INT(ord(c)) for c in 'a"b'))
+    assert run_program(code, memoize=memoize) == expected
+
+
+@pytest.mark.parametrize("memoize", [False, True])
+def test_error_constant_escaped_quote(memoize: bool) -> None:
+    code = 'func main()\n    return ~("a\\"b")\nendfunc'
+    assert run_program(code, memoize=memoize) == RRE_ERROR('a"b')
+
+
+@pytest.mark.parametrize("memoize", [False, True])
+def test_string_literal_literal_backslash(memoize: bool) -> None:
+    code = 'func main()\n    return "\\n"\nendfunc'
+    expected = RRE_LIST.create(tuple(RRE_INT(ord(c)) for c in "\\n"))
+    assert run_program(code, memoize=memoize) == expected
+
+
+@pytest.mark.parametrize("memoize", [False, True])
+def test_max_length_escaped_quotes_accepted(memoize: bool) -> None:
+    inner = '\\"' * MAX_LIST_LENGTH
+    code = f'func main()\n    return "{inner}"\nendfunc'
+    expected = RRE_LIST.create(tuple(RRE_INT(ord('"')) for _ in range(MAX_LIST_LENGTH)))
+    assert run_program(code, memoize=memoize) == expected
+
+
+def test_error_escaped_quotes_too_long() -> None:
+    inner = '\\"' * (MAX_LIST_LENGTH + 1)
+    code = f'func main()\n    return "{inner}"\nendfunc'
+    with pytest.raises(LexerErrorException):
+        run_program(code)
+
+
+def test_error_unclosed_quote_escaped_closer() -> None:
+    code = 'func main()\n    return "foo\\"\nendfunc'
+    with pytest.raises(LexerErrorException):
+        run_program(code)
+
+
+@pytest.mark.parametrize("memoize", [False, True])
 def test_append_to_max_length_list_is_noop(memoize: bool) -> None:
     code = """
     func main()
