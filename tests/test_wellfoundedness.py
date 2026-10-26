@@ -327,3 +327,86 @@ def test_memo_hit_of_completed_call_is_not_checked(memoize: bool) -> None:
     endfunc
     """
     assert run_program(code, memoize=memoize) == RRE_INT(8)
+
+
+GCD: str = """
+func main(a, b)
+    return gcd(a, b)
+endfunc
+
+func gcd(a, b)!
+    azero = >(0, a)
+    bzero = >(0, b)
+    done = >(+(azero, bzero), 1)
+    kept_index = -(1, azero)
+    kept_choices = +(+(b, []), a)
+    kept = -(kept_index, kept_choices)
+    base = +(kept, [])
+    index = -(1, done)
+    ageb = >(a, b)
+    diff_a = -(a, b)
+    diff_b = -(b, a)
+    a_choices = +(+(a, []), diff_a)
+    b_choices = +(+(diff_b, []), b)
+    next_a = -(ageb, a_choices)
+    next_b = -(ageb, b_choices)
+    recur = ?(done, gcd(next_a, next_b))
+    choices = +(base, recur)
+    return -(index, choices)
+endfunc
+"""
+
+
+@pytest.mark.parametrize("memoize", [False, True])
+@pytest.mark.parametrize(
+    "a, b, expected",
+    [
+        (0, 0, 0),
+        (0, 9, 9),
+        (7, 0, 7),
+        (1, 1, 1),
+        (12, 18, 6),
+        (15, 25, 5),
+    ],
+)
+def test_gcd_decreasing_succeeds(a: int, b: int, expected: int, memoize: bool) -> None:
+    assert run_program(
+        GCD,
+        inputs=[RRE_INT(a), RRE_INT(b)],
+        max_steps=10000,
+        memoize=memoize,
+    ) == RRE_INT(expected)
+
+
+@pytest.mark.parametrize("memoize", [False, True])
+def test_gcd_swap_when_smaller_fails(memoize: bool) -> None:
+    code = """
+    func main(a, b)
+        return gcd(a, b)
+    endfunc
+
+    func gcd(a, b)!
+        azero = >(0, a)
+        bzero = >(0, b)
+        done = >(+(azero, bzero), 1)
+        kept_index = -(1, azero)
+        kept_choices = +(+(b, []), a)
+        kept = -(kept_index, kept_choices)
+        base = +(kept, [])
+        index = -(1, done)
+        ageb = >(a, b)
+        a_choices = +(+(a, []), b)
+        b_choices = +(+(b, []), a)
+        next_a = -(ageb, a_choices)
+        next_b = -(ageb, b_choices)
+        recur = ?(done, gcd(next_a, next_b))
+        choices = +(base, recur)
+        return -(index, choices)
+    endfunc
+    """
+    assert run_program(
+        code,
+        inputs=[RRE_INT(3), RRE_INT(5)],
+        max_steps=10000,
+        memoize=memoize,
+    ) == RRE_ERROR("wellfoundedness")

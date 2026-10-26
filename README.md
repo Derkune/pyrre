@@ -337,3 +337,34 @@ func fib(n)#
     return -(pick, choices)
 endfunc
 ```
+
+### Greatest common divisor
+
+Each recursive pair is strictly smaller in the order `!` checks.
+
+```
+func main(a, b)
+    return gcd(a, b)
+endfunc
+
+func gcd(a, b)!
+    azero = >(0, a)
+    bzero = >(0, b)
+    done = >(+(azero, bzero), 1)
+    kept_index = -(1, azero)
+    kept_choices = +(+(b, []), a)
+    kept = -(kept_index, kept_choices)
+    base = +(kept, [])
+    index = -(1, done)
+    ageb = >(a, b)
+    diff_a = -(a, b)
+    diff_b = -(b, a)
+    a_choices = +(+(a, []), diff_a)
+    b_choices = +(+(diff_b, []), b)
+    next_a = -(ageb, a_choices)
+    next_b = -(ageb, b_choices)
+    recur = ?(done, gcd(next_a, next_b))
+    choices = +(base, recur)
+    return -(index, choices)
+endfunc
+```
