@@ -8,7 +8,7 @@ from pyrre.types import (
     SINGLE_CHAR_TOKENS,
     LexerErrorException,
 )
-from pyrre.static_config import MAX_INT, MAX_LIST_LENGTH
+from pyrre.static_config import MAX_INT, MIN_INT, MAX_LIST_LENGTH
 
 
 def _try_commit_accumulated(accumulated: list[str], lexed: list[Token]) -> None:
@@ -28,8 +28,14 @@ def _try_commit_accumulated(accumulated: list[str], lexed: list[Token]) -> None:
             lexed.append(Token(tokentype, tokentype.value))
             return
 
-    if charset.issubset(string.digits):
-        if int(joined) > MAX_INT:
+    is_negative_int = (
+        joined.startswith("-")
+        and len(joined) > 1
+        and set(joined[1:]).issubset(string.digits)
+    )
+    if charset.issubset(string.digits) or is_negative_int:
+        val = int(joined)
+        if val < MIN_INT or val > MAX_INT:
             raise LexerErrorException(f"{joined} is out of range for ints")
         lexed.append(Token(TokenType.CONSTINT, joined))
         return
@@ -77,9 +83,12 @@ def lex(text: str) -> list[Token]:
             continue
 
         if char in SINGLE_CHAR_TOKENS or char in string.whitespace:
-            commission_error = _try_commit_accumulated(accumulated, lexed)
-            if commission_error:
-                return commission_error
+            if char == "-" and i + 1 < len(text) and text[i + 1] in string.digits:
+                _try_commit_accumulated(accumulated, lexed)
+                accumulated = ["-"]
+                continue
+
+            _try_commit_accumulated(accumulated, lexed)
             accumulated = []
 
             if char in SINGLE_CHAR_TOKENS:
@@ -92,8 +101,5 @@ def lex(text: str) -> list[Token]:
     if inside_quote:
         raise LexerErrorException("Unclosed quote at the end")
 
-    commission_error = _try_commit_accumulated(accumulated, lexed)
-    if commission_error:
-        return commission_error
-
+    _try_commit_accumulated(accumulated, lexed)
     return lexed + [Token(TokenType.EOF, TokenType.EOF.value)]

@@ -385,6 +385,36 @@ def test_error_int_literal_above_max() -> None:
 
 
 @pytest.mark.parametrize("memoize", [False, True])
+def test_min_int_literal_accepted(memoize: bool) -> None:
+    code = """
+    func main()
+        return -128
+    endfunc
+    """
+    assert run_program(code, memoize=memoize) == RRE_INT(-128)
+
+
+@pytest.mark.parametrize("memoize", [False, True])
+def test_negative_int_literal_as_call_argument(memoize: bool) -> None:
+    code = """
+    func main()
+        return +(1, -2)
+    endfunc
+    """
+    assert run_program(code, memoize=memoize) == RRE_INT(-1)
+
+
+def test_error_int_literal_below_min() -> None:
+    code = """
+    func main()
+        return -129
+    endfunc
+    """
+    with pytest.raises(LexerErrorException):
+        run_program(code)
+
+
+@pytest.mark.parametrize("memoize", [False, True])
 def test_add_clamps_above_max_int(memoize: bool) -> None:
     code = """
     func main()
