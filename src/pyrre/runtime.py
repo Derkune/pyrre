@@ -169,7 +169,11 @@ def wellfoundedness_error(
 def replace_tail_function_frame(
     new_frame: FunctionStackFrame, stack: ProgramStack
 ) -> None:
-    while stack.call_stack and isinstance(stack.call_stack[-1], ExpressionStackFrame):
+    for _ in range(len(stack.call_stack)):
+        if not stack.call_stack or not isinstance(
+            stack.call_stack[-1], ExpressionStackFrame
+        ):
+            break
         stack.call_stack.pop()
 
     if not stack.call_stack or not isinstance(stack.call_stack[-1], FunctionStackFrame):
