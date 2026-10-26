@@ -166,10 +166,28 @@ def test_comparisons_integers(memoize: bool) -> None:
         gt = >(5, 3)
         eq = ≥(4, 4)
         lt = >(2, 8)
-        return +( +(+([], gt), eq), lt)
+        neg_gt_zero = >(-(0, 1), 0)
+        zero_gt_neg = >(0, -(0, 1))
+        pos_gt_neg_same = >(3, -(0, 3))
+        neg_gt_pos_same = >(-(0, 3), 3)
+        pos_gt_larger_neg = >(1, -(0, 2))
+        larger_neg_gt_pos = >(-(0, 2), 1)
+        return +(+(+(+(+(+(+(+(+([], gt), eq), lt), neg_gt_zero), zero_gt_neg), pos_gt_neg_same), neg_gt_pos_same), pos_gt_larger_neg), larger_neg_gt_pos)
     endfunc
     """
-    expected = RRE_LIST.create((RRE_INT(1), RRE_INT(1), RRE_INT(0)))
+    expected = RRE_LIST.create(
+        (
+            RRE_INT(1),
+            RRE_INT(1),
+            RRE_INT(0),
+            RRE_INT(1),
+            RRE_INT(0),
+            RRE_INT(1),
+            RRE_INT(0),
+            RRE_INT(0),
+            RRE_INT(1),
+        )
+    )
     assert run_program(code, memoize=memoize) == expected
 
 

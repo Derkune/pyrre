@@ -206,10 +206,10 @@ def test_reverse_list_without_tail_exceeds_depth_two(
 
 MULTIPLY: str = """
 func main(a, b)
-    nonneg = >(b, 0)
-    pos = times(a, b)
-    neg = -(0, times(a, -(0, b)))
+    nonneg = >(b, -(0, b))
     pick = -(1, nonneg)
+    pos = ?(pick, times(a, b))
+    neg = ?(nonneg, -(0, times(a, -(0, b))))
     choices = +(+(pos, []), neg)
     return -(pick, choices)
 endfunc

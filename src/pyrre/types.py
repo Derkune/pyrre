@@ -335,11 +335,9 @@ def lexicographical_comparison(
     lst1: immutable_list[RRE_VALUE],
     lst2: immutable_list[RRE_VALUE],
     functions: FunctionMappingView,
-    *,
-    magnitude: bool = False,
 ) -> int:
     for item1, item2 in zip(lst1, lst2):
-        result = value_comparison(item1, item2, functions, magnitude=magnitude)
+        result = value_comparison(item1, item2, functions)
         if result:
             return result
 
@@ -355,14 +353,15 @@ def value_comparison(
     val1: RRE_VALUE,
     val2: RRE_VALUE,
     functions: FunctionMappingView,
-    *,
-    magnitude: bool = False,
 ) -> int:
     match val1, val2:
         case RRE_INT(), RRE_INT():
-            left = abs(val1.value) if magnitude else val1.value
-            right = abs(val2.value) if magnitude else val2.value
-            return 1 if left > right else 0 if left == right else -1
+            left_abs, right_abs = abs(val1.value), abs(val2.value)
+            if left_abs != right_abs:
+                return 1 if left_abs > right_abs else -1
+            if val1.value == val2.value:
+                return 0
+            return -1 if val1.value < 0 else 1
         case RRE_INT(), RRE_LIST():
             return -1
         case RRE_INT(), RRE_THUNK():
@@ -373,9 +372,7 @@ def value_comparison(
         case RRE_LIST(), RRE_INT():
             return 1
         case RRE_LIST(), RRE_LIST():
-            return lexicographical_comparison(
-                val1.value, val2.value, functions, magnitude=magnitude
-            )
+            return lexicographical_comparison(val1.value, val2.value, functions)
         case RRE_LIST(), RRE_THUNK():
             return -1
         case RRE_LIST(), RRE_ERROR():
@@ -390,9 +387,7 @@ def value_comparison(
                 return 1
             if functions.get_idx(val1.funcname) < functions.get_idx(val2.funcname):
                 return -1
-            return lexicographical_comparison(
-                val1.arguments, val2.arguments, functions, magnitude=magnitude
-            )
+            return lexicographical_comparison(val1.arguments, val2.arguments, functions)
 
         case RRE_THUNK(), RRE_ERROR():
             return -1
@@ -415,7 +410,7 @@ def args_strictly_smaller(
     old_args: immutable_list[RRE_VALUE],
     functions: FunctionMappingView,
 ) -> bool:
-    return lexicographical_comparison(new_args, old_args, functions, magnitude=True) < 0
+    return lexicographical_comparison(new_args, old_args, functions) < 0
 
 
 def list_difference(

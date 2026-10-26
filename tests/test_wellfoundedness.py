@@ -32,7 +32,7 @@ def test_positive_countdown_succeeds(memoize: bool) -> None:
 def test_negative_countdown_toward_zero_succeeds(memoize: bool) -> None:
     code = """
     func rec(n)!
-        done = >(n, 0)
+        done = >(0, n)
         closer = +(n, 1)
         return ?(done, rec(closer))
     endfunc
@@ -60,7 +60,38 @@ def test_growing_argument_fails(memoize: bool) -> None:
 
 
 @pytest.mark.parametrize("memoize", [False, True])
-def test_equal_magnitude_fails(memoize: bool) -> None:
+def test_flip_positive_to_negative_succeeds(memoize: bool) -> None:
+    code = """
+    func rec(n)!
+        negated = -(0, n)
+        done = >(negated, n)
+        return ?(done, rec(negated))
+    endfunc
+
+    func main()
+        return rec(3)
+    endfunc
+    """
+    assert run_program(code, memoize=memoize) == RRE_INT(1)
+
+
+@pytest.mark.parametrize("memoize", [False, True])
+def test_flip_negative_to_positive_fails(memoize: bool) -> None:
+    code = """
+    func rec(n)!
+        negated = -(0, n)
+        return rec(negated)
+    endfunc
+
+    func main()
+        return rec(-(0, 3))
+    endfunc
+    """
+    assert run_program(code, memoize=memoize) == RRE_ERROR("wellfoundedness")
+
+
+@pytest.mark.parametrize("memoize", [False, True])
+def test_oscillating_sign_from_positive_fails(memoize: bool) -> None:
     code = """
     func rec(n)!
         negated = -(0, n)
