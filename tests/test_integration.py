@@ -919,7 +919,7 @@ def test_eager_return_forces_nested_percent_thunks(memoize: bool) -> None:
 
 
 @pytest.mark.parametrize("memoize", [False, True])
-def test_eager_return_forces_thunk_inside_list(memoize: bool) -> None:
+def test_eager_return_list_keeps_thunk_and_program_rejects_it(memoize: bool) -> None:
     code = """
     func main()
         return +([], lazy(1))
@@ -929,7 +929,62 @@ def test_eager_return_forces_thunk_inside_list(memoize: bool) -> None:
         return +(a, 2)
     endfunc
     """
-    assert run_program(code, memoize=memoize) == RRE_LIST.create((RRE_INT(3),))
+    assert run_program(code, memoize=memoize) == RRE_ERROR("Can't output thunks")
+
+
+@pytest.mark.parametrize("memoize", [False, True])
+def test_eager_return_list_does_not_run_thunk_body(memoize: bool) -> None:
+    code = """
+    func main()
+        return +([], lazy(1))
+    endfunc
+
+    func lazy(n)%
+        return ~("thunk error")
+    endfunc
+    """
+    assert run_program(code, memoize=memoize) == RRE_ERROR("Can't output thunks")
+
+
+@pytest.mark.parametrize("memoize", [False, True])
+def test_program_output_list_error_becomes_that_error(memoize: bool) -> None:
+    code = """
+    func main(x)
+        return x
+    endfunc
+    """
+    err = RRE_ERROR("from input")
+    thunk = RRE_THUNK.create("nope", ())
+    boxed = RRE_LIST.create((err, thunk))
+    assert run_program(code, inputs=[boxed], memoize=memoize) == err
+
+
+@pytest.mark.parametrize("memoize", [False, True])
+def test_program_output_list_thunk_before_error(memoize: bool) -> None:
+    code = """
+    func main(x)
+        return x
+    endfunc
+    """
+    err = RRE_ERROR("from input")
+    thunk = RRE_THUNK.create("nope", ())
+    boxed = RRE_LIST.create((thunk, err))
+    assert run_program(code, inputs=[boxed], memoize=memoize) == RRE_ERROR(
+        "Can't output thunks"
+    )
+
+
+@pytest.mark.parametrize("memoize", [False, True])
+def test_program_output_nested_thunk_is_error(memoize: bool) -> None:
+    code = """
+    func main(x)
+        return x
+    endfunc
+    """
+    nested = RRE_LIST.create((RRE_LIST.create((RRE_THUNK.create("nope", ()),)),))
+    assert run_program(code, inputs=[nested], memoize=memoize) == RRE_ERROR(
+        "Can't output thunks"
+    )
 
 
 @pytest.mark.parametrize("memoize", [False, True])

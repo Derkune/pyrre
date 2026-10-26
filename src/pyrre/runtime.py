@@ -35,6 +35,7 @@ from pyrre.static_config import MAX_RECURSION_DEPTH
 
 RECURSION_DEPTH_ERROR = RRE_ERROR("recursion depth")
 WELLFOUNDEDNESS_ERROR = RRE_ERROR("wellfoundedness")
+CANT_OUTPUT_THUNKS_ERROR = RRE_ERROR("Can't output thunks")
 
 
 def memo_key_for(name: funcname, args: Iterable[RRE_VALUE]) -> MemoKey:
@@ -186,14 +187,20 @@ def replace_tail_function_frame(
     stack.call_stack.append(new_frame)
 
 
-def value_contains_thunk(val: RRE_VALUE) -> bool:
+def program_output_value(val: RRE_VALUE) -> RRE_VALUE:
     match val:
         case RRE_THUNK():
-            return True
+            return CANT_OUTPUT_THUNKS_ERROR
+        case RRE_ERROR():
+            return val
         case RRE_LIST():
-            return any(value_contains_thunk(item) for item in val.value)
+            for item in val.value:
+                converted = program_output_value(item)
+                if isinstance(converted, RRE_ERROR):
+                    return converted
+            return val
         case _:
-            return False
+            return val
 
 
 def thunk_arity_error(thunk: RRE_THUNK, stack: ProgramStack) -> RRE_ERROR | None:
@@ -243,21 +250,10 @@ def push_thunk_evaluation(thunk: RRE_THUNK, stack: ProgramStack) -> None:
 
 
 def set_program_result(val: RRE_VALUE, stack: ProgramStack) -> None:
-    if isinstance(val, RRE_THUNK):
-        raise RuntimeErrorException("Thunk not allowed as a program return")
-
-    stack.final_value = val
+    stack.final_value = program_output_value(val)
 
 
 def receive_into_force_frame(frame: ForceFrame, val: RRE_VALUE) -> None:
-    if isinstance(frame.value, RRE_LIST):
-        if isinstance(val, RRE_ERROR):
-            frame.value = val
-            frame.forced_items = []
-        else:
-            frame.forced_items.append(val)
-        return
-
     frame.value = val
 
 
@@ -537,7 +533,7 @@ def process_function_frame(frame: FunctionStackFrame, stack: ProgramStack) -> No
         memo_key = frame.memo_key
         prior_memo_keys = frame.prior_memo_keys
         stack.call_stack.pop(-1)
-        if value_contains_thunk(val):
+        if isinstance(val, RRE_THUNK):
             stack.call_stack.append(
                 ForceFrame(val, memo_key=memo_key, prior_memo_keys=prior_memo_keys)
             )
@@ -562,7 +558,7 @@ def process_function_frame(frame: FunctionStackFrame, stack: ProgramStack) -> No
 def process_force_frame(frame: ForceFrame, stack: ProgramStack) -> None:
     val = frame.value
 
-    if isinstance(val, (RRE_INT, RRE_ERROR)):
+    if isinstance(val, (RRE_INT, RRE_ERROR, RRE_LIST)):
         complete_force_frame(val, stack)
         return
 
@@ -574,18 +570,7 @@ def process_force_frame(frame: ForceFrame, stack: ProgramStack) -> None:
         push_thunk_evaluation(val, stack)
         return
 
-    if not isinstance(val, RRE_LIST):
-        raise RuntimeErrorException("unknown value in process_force_frame")
-
-    items = val.value
-    start = len(frame.forced_items)
-    for item in items[start:]:
-        if value_contains_thunk(item):
-            stack.call_stack.append(ForceFrame(item))
-            return
-        frame.forced_items.append(item)
-
-    complete_force_frame(RRE_LIST.create(tuple(frame.forced_items)), stack)
+    raise RuntimeErrorException("unknown value in process_force_frame")
 
 
 def execute_step(stack: ProgramStack) -> ProgramStack:

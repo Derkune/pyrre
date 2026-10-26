@@ -590,7 +590,6 @@ class FunctionStackFrame:
 @dataclass
 class ForceFrame:
     value: RRE_VALUE
-    forced_items: list[RRE_VALUE] = field(default_factory=list)
     memo_key: MemoKey | None = None
     prior_memo_keys: tuple[MemoKey, ...] = ()
 

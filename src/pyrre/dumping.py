@@ -62,9 +62,6 @@ def dump_force_frame(frame: ForceFrame) -> list[str]:
     lines: list[str] = []
 
     lines.append(f"###### FRAME FORCE {dumps_obj_json_with_dataclass(frame.value)}")
-    lines.append(
-        f"###### FRAME FORCED ITEMS {dumps_obj_json_with_dataclass(frame.forced_items)}"
-    )
     lines.append("")
 
     return lines
