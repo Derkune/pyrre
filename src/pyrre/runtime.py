@@ -29,17 +29,21 @@ from pyrre.types import (
     FUNC_MODS,
     is_truthy,
     Program,
+    args_strictly_smaller,
 )
 from pyrre.static_config import MAX_RECURSION_DEPTH
 
 RECURSION_DEPTH_ERROR = RRE_ERROR("recursion depth")
+WELLFOUNDEDNESS_ERROR = RRE_ERROR("wellfoundedness")
 
 
 def memo_key_for(name: funcname, args: Iterable[RRE_VALUE]) -> MemoKey:
     return (name, tuple(args))
 
 
-def lookup_memo(func: FunctionDef, key: MemoKey, stack: ProgramStack) -> RRE_VALUE | None:
+def lookup_memo(
+    func: FunctionDef, key: MemoKey, stack: ProgramStack
+) -> RRE_VALUE | None:
     if FUNC_MODS.MEMOIZE not in func.modifiers:
         return None
     return stack.memo.get(key)
@@ -128,15 +132,42 @@ def is_tail_self_call(*, func: FunctionDef, caller_func: funcname) -> bool:
     return FUNC_MODS.TAIL_RECURSE in func.modifiers and caller_func == func.name
 
 
+def frame_argument_tuple(
+    frame: FunctionStackFrame, func: FunctionDef
+) -> tuple[RRE_VALUE, ...]:
+    return tuple(frame.bindings[name] for name in func.param_names)
+
+
+def wellfoundedness_error(
+    *,
+    func: FunctionDef,
+    evaluated_args: list[RRE_VALUE],
+    stack: ProgramStack,
+) -> RRE_ERROR | None:
+    if FUNC_MODS.ASSERT_WELLFOUNDEDNESS not in func.modifiers:
+        return None
+
+    for frame in reversed(stack.call_stack):
+        if not isinstance(frame, FunctionStackFrame):
+            continue
+        if frame.funcname != func.name:
+            continue
+        old_args = frame_argument_tuple(frame, func)
+        if args_strictly_smaller(
+            tuple(evaluated_args), old_args, stack.program.functions
+        ):
+            return None
+        return WELLFOUNDEDNESS_ERROR
+    return None
+
+
 def replace_tail_function_frame(
     new_frame: FunctionStackFrame, stack: ProgramStack
 ) -> None:
     while stack.call_stack and isinstance(stack.call_stack[-1], ExpressionStackFrame):
         stack.call_stack.pop()
 
-    if not stack.call_stack or not isinstance(
-        stack.call_stack[-1], FunctionStackFrame
-    ):
+    if not stack.call_stack or not isinstance(stack.call_stack[-1], FunctionStackFrame):
         raise RuntimeErrorException("tail recurse expected a function frame")
 
     old = stack.call_stack[-1]
@@ -187,15 +218,20 @@ def push_thunk_evaluation(thunk: RRE_THUNK, stack: ProgramStack) -> None:
         return
 
     func = stack.program.functions[thunk.funcname]
-    cached = lookup_memo(
-        func, memo_key_for(thunk.funcname, thunk.arguments), stack
-    )
+    cached = lookup_memo(func, memo_key_for(thunk.funcname, thunk.arguments), stack)
     if cached is not None:
         complete_force_frame(cached, stack)
         return
+    evaluated_args = list(thunk.arguments)
+    wf_error = wellfoundedness_error(
+        func=func, evaluated_args=evaluated_args, stack=stack
+    )
+    if wf_error is not None:
+        complete_force_frame(wf_error, stack)
+        return
     frame = construct_function_call_frame(
         call=Call(thunk.funcname, ()),
-        evaluated_args=list(thunk.arguments),
+        evaluated_args=evaluated_args,
         func=func,
     )
     if not try_push_function_frame(frame, stack):
@@ -313,15 +349,20 @@ def schedule_forced_thunk(thunk: RRE_THUNK, stack: ProgramStack) -> None:
         return
 
     func = stack.program.functions[thunk.funcname]
-    cached = lookup_memo(
-        func, memo_key_for(thunk.funcname, thunk.arguments), stack
-    )
+    cached = lookup_memo(func, memo_key_for(thunk.funcname, thunk.arguments), stack)
     if cached is not None:
         handle_value_from_top_of_stack(cached, stack)
         return
+    evaluated_args = list(thunk.arguments)
+    wf_error = wellfoundedness_error(
+        func=func, evaluated_args=evaluated_args, stack=stack
+    )
+    if wf_error is not None:
+        handle_value_from_top_of_stack(wf_error, stack)
+        return
     frame = construct_function_call_frame(
         call=Call(thunk.funcname, ()),
-        evaluated_args=list(thunk.arguments),
+        evaluated_args=evaluated_args,
         func=func,
     )
     if is_tail_self_call(func=func, caller_func=top_frame.caller_func):
@@ -395,11 +436,15 @@ def response_if_func_call_parameters_evaluated(
     stack: ProgramStack,
 ) -> Callable[[], None]:
     def response() -> None:
-        cached = lookup_memo(
-            func, memo_key_for(call.funcname, evaluated_args), stack
-        )
+        cached = lookup_memo(func, memo_key_for(call.funcname, evaluated_args), stack)
         if cached is not None:
             handle_value_from_top_of_stack(cached, stack)
+            return
+        wf_error = wellfoundedness_error(
+            func=func, evaluated_args=evaluated_args, stack=stack
+        )
+        if wf_error is not None:
+            handle_value_from_top_of_stack(wf_error, stack)
             return
         frame = construct_function_call_frame(
             call=call, evaluated_args=evaluated_args, func=func
@@ -490,9 +535,7 @@ def process_function_frame(frame: FunctionStackFrame, stack: ProgramStack) -> No
         stack.call_stack.pop(-1)
         if value_contains_thunk(val):
             stack.call_stack.append(
-                ForceFrame(
-                    val, memo_key=memo_key, prior_memo_keys=prior_memo_keys
-                )
+                ForceFrame(val, memo_key=memo_key, prior_memo_keys=prior_memo_keys)
             )
         else:
             store_frame_memos(memo_key, prior_memo_keys, val, stack)
